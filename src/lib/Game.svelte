@@ -322,7 +322,10 @@
 
   /** The short progress line shown in a player's panel. */
   function progress(p: GameState['players'][number]): string {
-    return yousee ? `${p.phase} of ${PHASE_COUNT} done` : phaseLabel(targetPhase(game, p) ?? PHASE_COUNT)
+    if (yousee) return `${p.phase} of ${PHASE_COUNT} done`
+    const label = phaseLabel(targetPhase(game, p) ?? PHASE_COUNT)
+    // Once a round is over, a player who finished their phase has already moved on to the next one.
+    return game.status === 'roundOver' ? `Next: ${label}` : label
   }
 
   /** What a player is after right now, shown under their stats. */
@@ -565,9 +568,9 @@
                   {:else if yousee}
                     {progress(p)}
                   {:else}
-                    {progress(p)}{game.roundResult?.completed[i] ? '' : ' (repeat)'}
+                    {phaseLabel(targetPhase(game, p) ?? PHASE_COUNT)}{game.roundResult?.completed[i] ? '' : ' (repeat)'}
                   {/if}
-                  {#if yousee && game.roundResult?.completed[i] && p.laidPhase !== null}
+                  {#if game.roundResult?.completed[i] && p.laidPhase !== null}
                     <span class="sub">Completed Phase {p.laidPhase + 1}</span>
                   {/if}
                 </td>
