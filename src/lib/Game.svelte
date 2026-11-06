@@ -401,13 +401,14 @@
                   {#if p.hand.length === 0}
                     <span class="breakdown">Went out with no cards left</span>
                   {:else}
+                    {@const left = sortHand(p.hand, 'number')}
                     <div class="left-cards">
-                      {#each sortHand(p.hand, 'number') as c (c.id)}
+                      {#each left as c (c.id)}
                         <CardView card={c} size="xs" />
                       {/each}
                     </div>
                     <span class="breakdown">
-                      {p.hand.map((c) => cardPoints(c)).join(' + ')} = {p.hand.reduce((sum, c) => sum + cardPoints(c), 0)}
+                      {left.map((c) => cardPoints(c)).join(' + ')} = {left.reduce((sum, c) => sum + cardPoints(c), 0)}
                     </span>
                   {/if}
                 </td>
