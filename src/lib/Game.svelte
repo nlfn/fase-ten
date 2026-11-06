@@ -266,6 +266,9 @@
           <span>{p.hand.length} cards</span>
           <span>{p.score} points</span>
         </div>
+        {#if p.phase < PHASE_COUNT}
+          <p class="pgoal">{phaseDescription(p.phase)}</p>
+        {/if}
         {#if canPlaySkip && i !== HUMAN}
           <button type="button" class="chip" onclick={() => playSkipOn(i)}>Play on {p.name}</button>
         {/if}
@@ -452,6 +455,11 @@
   }
   .player .chip {
     margin-top: 0.4rem;
+  }
+  .pgoal {
+    margin: 0.25rem 0 0;
+    font-size: 0.8rem;
+    color: var(--gold);
   }
   .phead {
     display: flex;
