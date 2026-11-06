@@ -14,10 +14,10 @@
 
 import { cardPoints } from './cards'
 import type { Card } from './cards'
-import { canHit, findPhaseLayout, phaseMissing } from './phases'
+import { PHASE_COUNT, canHit, findPhaseLayout, phaseMissing, phaseSize } from './phases'
 import type { RunEnd } from './phases'
 import { currentPlayer, hitTargets, topDiscard } from './game'
-import type { Action, GameState } from './game'
+import type { Action, GameState, Player } from './game'
 
 export type BotLevel = 'easy' | 'normal'
 
@@ -31,6 +31,19 @@ const MISTAKE_RATE: Record<BotLevel, number> = { easy: 0.35, normal: 0 }
 export function createBot(level: BotLevel = 'normal', random: () => number = Math.random): Bot {
   const mistake = () => random() < MISTAKE_RATE[level]
 
+  /** The phases this player could still lay down this round. */
+  function openPhases(state: GameState, me: Player): number[] {
+    if (state.mode === 'classic') return me.phase < PHASE_COUNT ? [me.phase] : []
+    return me.done.map((done, i) => (done ? -1 : i)).filter((i) => i >= 0)
+  }
+
+  /** How many cards short the hand is of the closest phase the player is still free to lay down. */
+  function missingFor(state: GameState, me: Player, hand: readonly Card[]): number {
+    const open = openPhases(state, me)
+    if (open.length === 0) return 0
+    return Math.min(...open.map((i) => phaseMissing(hand, i)))
+  }
+
   function chooseDraw(state: GameState): Action {
     const me = currentPlayer(state)
     const top = topDiscard(state)
@@ -40,7 +53,7 @@ export function createBot(level: BotLevel = 'normal', random: () => number = Mat
     if (me.laidDown) {
       wanted = state.melds.some((m) => canHit(m, top))
     } else {
-      wanted = phaseMissing([...me.hand, top], me.phase) < phaseMissing(me.hand, me.phase)
+      wanted = missingFor(state, me, [...me.hand, top]) < missingFor(state, me, me.hand)
     }
     if (wanted && !mistake()) return { type: 'drawDiscard' }
     return { type: 'drawDeck' }
@@ -50,9 +63,16 @@ export function createBot(level: BotLevel = 'normal', random: () => number = Mat
     const me = currentPlayer(state)
 
     if (!me.laidDown) {
-      if (phaseMissing(me.hand, me.phase) === 0) {
-        const layout = findPhaseLayout(me.hand, me.phase, state.melds)
-        if (layout) return { type: 'layDown', groups: layout.map((g) => g.map((c) => c.id)) }
+      // In YouSee any unfinished phase will do. Take the biggest one the hand can make, since
+      // the small ones are easy to pick up later.
+      const ready = openPhases(state, me)
+        .filter((i) => phaseMissing(me.hand, i) === 0)
+        .sort((a, b) => phaseSize(b) - phaseSize(a) || b - a)
+      for (const phase of ready) {
+        const layout = findPhaseLayout(me.hand, phase, state.melds)
+        if (layout) {
+          return { type: 'layDown', groups: layout.map((g) => g.map((c) => c.id)), phase }
+        }
       }
     } else if (!mistake()) {
       const hit = chooseHit(state)
@@ -138,7 +158,7 @@ export function createBot(level: BotLevel = 'normal', random: () => number = Mat
     let bestMissing = Infinity
     for (const c of candidates) {
       const rest = hand.filter((h) => h.id !== c.id)
-      const missing = phaseMissing(rest, me.phase)
+      const missing = missingFor(state, me, rest)
       if (missing < bestMissing) {
         bestMissing = missing
         best = c

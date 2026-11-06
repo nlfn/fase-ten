@@ -1,12 +1,13 @@
 <script lang="ts">
   import { PHASES } from '../engine'
-  import type { BotLevel } from '../engine'
+  import type { BotLevel, GameMode } from '../engine'
   import type { Session } from './storage'
 
   export interface GameConfig {
     name: string
     opponents: 1 | 2
     level: BotLevel
+    mode: GameMode
   }
 
   interface Props {
@@ -20,19 +21,23 @@
   let name = $state('You')
   let opponents = $state<1 | 2>(1)
   let level = $state<BotLevel>('normal')
+  let mode = $state<GameMode>('classic')
 
   // The date and time are shown in the viewer's own time zone.
   const buildInfo = `${__BUILD_LABEL__}, built ${new Date(__BUILD_TIME__).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`
 
-  const savedSummary = $derived(
-    saved
-      ? `Round ${saved.state.round}, you are on Phase ${saved.state.players[0].phase + 1}`
-      : '',
-  )
+  const savedSummary = $derived.by(() => {
+    if (!saved) return ''
+    const me = saved.state.players[0]
+    if (saved.state.mode === 'yousee') {
+      return `YouSee, round ${saved.state.round}, ${me.phase} of 10 phases done`
+    }
+    return `Round ${saved.state.round}, you are on Phase ${me.phase + 1}`
+  })
 
   function submit(event: SubmitEvent) {
     event.preventDefault()
-    onStart({ name: name.trim() || 'You', opponents, level })
+    onStart({ name: name.trim() || 'You', opponents, level, mode })
   }
 </script>
 
@@ -57,6 +62,19 @@
       <span>Your name</span>
       <input type="text" bind:value={name} maxlength="16" autocomplete="off" />
     </label>
+
+    <fieldset>
+      <legend>Game</legend>
+      <div class="segment">
+        <label><input type="radio" name="mode" value="classic" bind:group={mode} /><span>Fase Ten</span></label>
+        <label><input type="radio" name="mode" value="yousee" bind:group={mode} /><span>Fase Ten YouSee</span></label>
+      </div>
+      <p class="hint">
+        {mode === 'classic'
+          ? 'The classic game. Work through the ten phases in order.'
+          : 'Like Yahtzee. Each time you lay down, you choose which phase you are completing. Do them in any order, but each phase only once.'}
+      </p>
+    </fieldset>
 
     <fieldset>
       <legend>Computer players</legend>
@@ -90,13 +108,18 @@
         top of the discard pile), then discard one. Once you have the right cards, lay down your phase. After that
         you can add cards to any group on the table, called hitting. Go out first to end the round.
       </p>
+      <p>
+        <strong>Fase Ten YouSee:</strong> the same game, but you are not locked to the next phase. When you lay
+        down, you pick any phase you have not completed yet, and it is decided once the cards are down. Finish all
+        ten in any order. The Phase chart button shows what each player has completed.
+      </p>
       <ul>
         <li><strong>Set:</strong> cards with the same number.</li>
         <li><strong>Run:</strong> cards in number order, any colors. No wrapping from 12 to 1.</li>
         <li><strong>Wild:</strong> stands in for any card. Every group needs at least one regular card.</li>
         <li><strong>Skip:</strong> can't be used in a group. Discard it to make another player lose a turn.</li>
         <li><strong>Points left in hand:</strong> 1 to 9 are 5 each, 10 to 12 are 10 each, Skip is 15, Wild is 25.</li>
-        <li>You only move to the next phase if you laid yours down. The lowest score wins ties.</li>
+        <li>You only get credit for a phase if you laid it down. The lowest score wins ties.</li>
       </ul>
       <ol class="phases">
         {#each PHASES as phase (phase.number)}

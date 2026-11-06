@@ -14,11 +14,19 @@ import type { Card } from './cards'
 import { PHASE_COUNT, canHit, hitMeld, matchPhase, phaseDescription, runEndsFor } from './phases'
 import type { Meld, RunEnd } from './phases'
 
+/**
+ * classic: you work through the ten phases in order.
+ * yousee: when you lay down, you choose which of the phases you have not done yet.
+ */
+export type GameMode = 'classic' | 'yousee'
+
 export interface Player {
   name: string
   isBot: boolean
   hand: Card[]
-  phase: number // index 0..9 of the phase being attempted; 10 means all phases done
+  phase: number // classic: index 0..9 of the phase being attempted. Always the number of phases completed; 10 means all done
+  done: boolean[] // which of the ten phases this player has completed
+  laidPhase: number | null // the phase laid down this round (counts as done when the round ends)
   laidDown: boolean // has laid down this round
   skipped: boolean // loses their next turn
   score: number // lower is better
@@ -50,6 +58,7 @@ export type PlayEvent =
   | { player: number; kind: 'hit'; card: Card; owner: number } // added to a group on the table
 
 export interface GameState {
+  mode: GameMode
   players: Player[]
   drawPile: Card[] // last element is the top
   discardPile: Card[] // last element is the top
@@ -71,7 +80,7 @@ export interface GameState {
 export type Action =
   | { type: 'drawDeck' }
   | { type: 'drawDiscard' }
-  | { type: 'layDown'; groups: number[][] } // card ids, one array per group
+  | { type: 'layDown'; groups: number[][]; phase?: number } // card ids, one array per group; phase is required in yousee mode
   | { type: 'hit'; cardId: number; meldId: number; end?: RunEnd }
   | { type: 'discard'; cardId: number; skipTarget?: number }
 
@@ -102,16 +111,23 @@ const succeed = (state: GameState): ActionResult => ({ ok: true, state })
 // Setup
 // ---------------------------------------------------------------------------
 
-export function createGame(setups: readonly PlayerSetup[], seed: number = randomSeed()): GameState {
+export function createGame(
+  setups: readonly PlayerSetup[],
+  seed: number = randomSeed(),
+  mode: GameMode = 'classic',
+): GameState {
   if (setups.length < 2 || setups.length > 6) {
     throw new Error('Phase games need between 2 and 6 players')
   }
   const state: GameState = {
+    mode,
     players: setups.map((p) => ({
       name: p.name,
       isBot: p.isBot,
       hand: [],
       phase: 0,
+      done: Array.from({ length: PHASE_COUNT }, () => false),
+      laidPhase: null,
       laidDown: false,
       skipped: false,
       score: 0,
@@ -153,6 +169,7 @@ function dealRound(state: GameState): void {
   for (const p of state.players) {
     p.hand = deck.splice(0, HAND_SIZE)
     p.laidDown = false
+    p.laidPhase = null
     p.skipped = false
   }
   const starter = deck.pop() as Card
@@ -203,7 +220,11 @@ function endRound(state: GameState, winner: number | null): void {
   const completed = state.players.map((p) => p.laidDown)
   state.players.forEach((p, i) => {
     p.score += points[i]
-    if (p.laidDown) p.phase += 1
+    if (p.laidDown) {
+      // In classic mode the phase laid down is always the current one.
+      p.done[p.laidPhase ?? p.phase] = true
+      p.phase = p.done.filter(Boolean).length
+    }
   })
   state.roundResult = { winner, points, completed }
 
@@ -273,17 +294,27 @@ export function applyAction(state: GameState, action: Action): ActionResult {
         }
         groups.push(cards)
       }
-      const bodies = matchPhase(player.phase, groups)
+      let phaseIdx = player.phase
+      if (s.mode === 'yousee') {
+        const chosen = action.phase
+        if (chosen === undefined || !Number.isInteger(chosen) || chosen < 0 || chosen >= PHASE_COUNT) {
+          return fail('Choose which phase you are laying down')
+        }
+        if (player.done[chosen]) return fail(`You already completed Phase ${chosen + 1}`)
+        phaseIdx = chosen
+      }
+      const bodies = matchPhase(phaseIdx, groups)
       if (!bodies) {
-        return fail(`Those cards do not make Phase ${player.phase + 1} (${phaseDescription(player.phase)})`)
+        return fail(`Those cards do not make Phase ${phaseIdx + 1} (${phaseDescription(phaseIdx)})`)
       }
       player.hand = player.hand.filter((c) => !used.has(c.id))
       for (const body of bodies) {
         s.melds.push({ ...body, id: s.nextMeldId++, owner: s.current } as Meld)
       }
       player.laidDown = true
-      addLog(s, `${player.name} laid down Phase ${player.phase + 1}`)
-      addEvent(s, { player: s.current, kind: 'laydown', phase: player.phase })
+      player.laidPhase = phaseIdx
+      addLog(s, `${player.name} laid down Phase ${phaseIdx + 1}`)
+      addEvent(s, { player: s.current, kind: 'laydown', phase: phaseIdx })
       if (player.hand.length === 0) endRound(s, s.current)
       return succeed(s)
     }
@@ -344,6 +375,19 @@ export function applyAction(state: GameState, action: Action): ActionResult {
       return succeed(s)
     }
   }
+}
+
+/** Fills in fields that games saved by earlier versions do not have. */
+export function upgradeSavedState(state: GameState): GameState {
+  state.turnCount ??= 0
+  state.hits ??= []
+  state.events ??= []
+  state.mode ??= 'classic'
+  for (const p of state.players) {
+    p.done ??= Array.from({ length: PHASE_COUNT }, (_, i) => i < p.phase)
+    p.laidPhase ??= p.laidDown ? Math.min(p.phase, PHASE_COUNT - 1) : null
+  }
+  return state
 }
 
 // ---------------------------------------------------------------------------

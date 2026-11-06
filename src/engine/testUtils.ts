@@ -2,7 +2,7 @@
 
 import type { Card, Color, NumberCard, SkipCard, WildCard } from './cards'
 import { createGame } from './game'
-import type { GameState, PlayerSetup } from './game'
+import type { GameMode, GameState, PlayerSetup } from './game'
 
 let nextTestId = 10_000
 
@@ -36,14 +36,16 @@ export const THREE_PLAYERS: PlayerSetup[] = [
  */
 export function craftedGame(
   hand: Card[],
-  options: { setups?: PlayerSetup[]; player?: number; phase?: number; seed?: number } = {},
+  options: { setups?: PlayerSetup[]; player?: number; phase?: number; seed?: number; mode?: GameMode } = {},
 ): GameState {
-  const { setups = TWO_PLAYERS, player = 0, phase = 0, seed = 1 } = options
-  const s = structuredClone(createGame(setups, seed))
+  const { setups = TWO_PLAYERS, player = 0, phase = 0, seed = 1, mode = 'classic' } = options
+  const s = structuredClone(createGame(setups, seed, mode))
   s.current = player
   s.stage = 'play'
   for (const p of s.players) p.skipped = false
   s.players[player].hand = hand
   s.players[player].phase = phase
+  // In classic mode the earlier phases are done. In yousee, tests set `done` themselves.
+  if (mode === 'classic') s.players[player].done = s.players[player].done.map((_, i) => i < phase)
   return s
 }

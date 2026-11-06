@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    PHASES,
     PHASE_COUNT,
     applyAction,
     arrangeSelection,
@@ -17,6 +18,9 @@
   } from '../engine'
   import type { Action, Card, GameState, HitTarget, Meld, PlayEvent, RunEnd } from '../engine'
   import CardView from './CardView.svelte'
+  import PhaseChart from './PhaseChart.svelte'
+  import PhasePicker from './PhasePicker.svelte'
+  import type { PhaseOption } from './PhasePicker.svelte'
   import { clearSession, saveSession } from './storage'
   import type { Session } from './storage'
 
@@ -43,8 +47,11 @@
   // States from before each lay down or hit this turn, so those moves can be taken back.
   // Drawing and discarding clear it: they cannot be undone.
   let undoStack = $state.raw<GameState[]>([])
+  let showChart = $state(false)
+  let showPicker = $state(false)
 
   const HUMAN = 0
+  const yousee = $derived(game.mode === 'yousee')
   const me = $derived(game.players[HUMAN])
   const cur = $derived(currentPlayer(game))
   const myTurn = $derived(game.status === 'playing' && game.current === HUMAN)
@@ -77,7 +84,9 @@
     if (game.stage === 'draw') return 'Your turn. Draw from the deck or take the top discard.'
     if (canPlaySkip) return 'Choose who loses a turn.'
     if (!me.laidDown) {
-      return `Lay down Phase ${me.phase + 1} (${phaseDescription(me.phase)}) when you can, then discard one card.`
+      return yousee
+        ? 'Lay down any phase you have not completed when you can, then discard one card.'
+        : `Lay down Phase ${me.phase + 1} (${phaseDescription(me.phase)}) when you can, then discard one card.`
     }
     return 'Pick a card to add to a group on the table, or discard one card to end your turn.'
   })
@@ -164,14 +173,46 @@
     notice = ''
   }
 
+  /** The groups a phase would be laid down as: from the selected cards if several are picked, else the best layout in hand. */
+  function layoutFor(phase: number): Card[][] | null {
+    return selectedCards.length > 1
+      ? arrangeSelection(selectedCards, phase)
+      : findPhaseLayout(me.hand, phase, game.melds)
+  }
+
+  const pickerOptions = $derived.by((): PhaseOption[] => {
+    if (!showPicker) return []
+    return PHASES.map((phase, index) => ({
+      index,
+      description: phase.description,
+      status: me.done[index] ? 'done' : layoutFor(index) ? 'ready' : 'notyet',
+    }))
+  })
+
   function layDown() {
+    if (selectedCards.length > 1 && selectedCards.some((c) => c.kind === 'skip')) {
+      notice = "Skip cards can't go in a group. Select the Skip alone, then choose a player to play it on."
+      return
+    }
+
+    if (yousee) {
+      // You choose the phase, so show the ones these cards can make and let the player pick.
+      const canMake = PHASES.some((_, i) => !me.done[i] && layoutFor(i) !== null)
+      if (!canMake) {
+        notice =
+          selectedCards.length > 1
+            ? 'Those cards do not make any phase you have not completed yet.'
+            : 'You can not lay down any of your remaining phases yet.'
+        return
+      }
+      notice = ''
+      showPicker = true
+      return
+    }
+
     let groups: Card[][] | null
     // One selected card can never be a whole phase, so a single card means "find it for me".
     if (selectedCards.length > 1) {
-      if (selectedCards.some((c) => c.kind === 'skip')) {
-        notice = "Skip cards can't go in a group. Select the Skip alone, then choose a player to play it on."
-        return
-      }
       groups = arrangeSelection(selectedCards, me.phase)
       if (!groups) {
         notice = `Those cards do not make Phase ${me.phase + 1} (${phaseDescription(me.phase)}).`
@@ -185,6 +226,13 @@
       }
     }
     dispatch({ type: 'layDown', groups: groups.map((g) => g.map((c) => c.id)) })
+  }
+
+  function pickPhase(phase: number) {
+    const groups = layoutFor(phase)
+    showPicker = false
+    if (!groups) return
+    dispatch({ type: 'layDown', groups: groups.map((g) => g.map((c) => c.id)), phase })
   }
 
   function undo() {
@@ -259,6 +307,20 @@
   function phaseLabel(phase: number): string {
     return phase >= PHASE_COUNT ? 'All phases done' : `Phase ${phase + 1}`
   }
+
+  /** The short progress line shown in a player's panel. */
+  function progress(p: GameState['players'][number]): string {
+    return yousee ? `${p.phase} of ${PHASE_COUNT} done` : phaseLabel(p.phase)
+  }
+
+  /** What a player is after right now, shown under their stats. */
+  function goalLine(p: GameState['players'][number]): string {
+    if (p.laidDown && p.laidPhase !== null) {
+      return `Laid down Phase ${p.laidPhase + 1}: ${phaseDescription(p.laidPhase)}`
+    }
+    if (yousee) return ''
+    return p.phase < PHASE_COUNT ? phaseDescription(p.phase) : ''
+  }
 </script>
 
 {#snippet meldView(m: Meld)}
@@ -289,7 +351,14 @@
 <div class="table">
   <header class="bar">
     <h1>Round {game.round}</h1>
-    <p class="goal"><strong>Phase {Math.min(me.phase + 1, PHASE_COUNT)}</strong> {phaseDescription(me.phase)}</p>
+    {#if me.laidDown && me.laidPhase !== null}
+      <p class="goal"><strong>Phase {me.laidPhase + 1}</strong> {phaseDescription(me.laidPhase)}</p>
+    {:else if yousee}
+      <p class="goal"><strong>Your choice</strong> {me.phase} of {PHASE_COUNT} phases done</p>
+    {:else}
+      <p class="goal"><strong>Phase {Math.min(me.phase + 1, PHASE_COUNT)}</strong> {phaseDescription(me.phase)}</p>
+    {/if}
+    <button type="button" class="ghost" onclick={() => (showChart = true)}>Phases</button>
     <button type="button" class="ghost" onclick={onExit}>Menu</button>
   </header>
 
@@ -306,12 +375,12 @@
           {#if p.skipped}<span class="badge warn">Loses a turn</span>{/if}
         </div>
         <div class="pstats">
-          <span>{phaseLabel(p.phase)}</span>
+          <span>{progress(p)}</span>
           <span>{p.hand.length} cards</span>
           <span>{p.score} points</span>
         </div>
-        {#if p.phase < PHASE_COUNT}
-          <p class="pgoal">{phaseDescription(p.phase)}</p>
+        {#if goalLine(p)}
+          <p class="pgoal">{goalLine(p)}</p>
         {/if}
         {#if canPlaySkip && i !== HUMAN}
           <button type="button" class="chip" onclick={() => playSkipOn(i)}>Play on {p.name}</button>
@@ -393,7 +462,7 @@
     <div class="actions">
       {#if !me.laidDown}
         <button type="button" class="primary" disabled={!canLay} onclick={layDown}>
-          {selectedCards.length > 1 ? 'Lay down selected' : 'Lay down phase'}
+          {selectedCards.length > 1 ? 'Lay down selected' : yousee ? 'Lay down a phase' : 'Lay down phase'}
         </button>
       {/if}
       <button type="button" disabled={!canDiscard} onclick={discardSelected}>Discard</button>
@@ -411,6 +480,19 @@
     </div>
   </section>
 
+  {#if showPicker && myTurn}
+    <PhasePicker
+      options={pickerOptions}
+      usingSelection={selectedCards.length > 1}
+      onPick={pickPhase}
+      onClose={() => (showPicker = false)}
+    />
+  {/if}
+
+  {#if showChart}
+    <PhaseChart {game} onClose={() => (showChart = false)} />
+  {/if}
+
   {#if game.status !== 'playing'}
     <div class="overlay">
       <div class="panel" role="dialog" aria-modal="true" aria-labelledby="result-title">
@@ -427,9 +509,14 @@
                 <td>{p.score}</td>
                 <td>
                   {#if game.status === 'gameOver'}
-                    {p.phase >= PHASE_COUNT ? 'Finished' : phaseLabel(p.phase)}
+                    {p.phase >= PHASE_COUNT ? 'Finished' : progress(p)}
+                  {:else if yousee}
+                    {progress(p)}
                   {:else}
                     {phaseLabel(p.phase)}{game.roundResult?.completed[i] ? '' : ' (repeat)'}
+                  {/if}
+                  {#if yousee && game.roundResult?.completed[i] && p.laidPhase !== null}
+                    <span class="sub">Completed Phase {p.laidPhase + 1}</span>
                   {/if}
                 </td>
               </tr>
@@ -476,17 +563,29 @@
 
   .bar {
     display: flex;
-    align-items: baseline;
-    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+  }
+  @media (max-width: 560px) {
+    /* On a phone the goal gets its own row under the title and buttons. */
+    .bar h1 {
+      margin-right: auto;
+    }
+    .goal {
+      order: 3;
+      flex: 1 1 100%;
+    }
   }
   .bar h1 {
+    flex: none;
     margin: 0;
     font-size: 1.1rem;
     font-weight: 800;
   }
   .goal {
     margin: 0;
-    flex: 1;
+    flex: 1 1 12rem;
     color: var(--text-dim);
     font-size: 0.95rem;
   }
@@ -827,6 +926,11 @@
     height: 1.1rem;
     border-radius: 0.15rem;
     box-shadow: 0 0 0 2px #6ee7f9;
+  }
+  .sub {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--gold);
   }
   .big {
     padding: 0.9rem;

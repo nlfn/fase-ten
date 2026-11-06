@@ -3,7 +3,7 @@ import { DECK_SIZE, nextRandom } from './cards'
 import { createBot } from './bot'
 import type { Bot, BotLevel } from './bot'
 import { applyAction, createGame, nextRound } from './game'
-import type { GameState, PlayerSetup } from './game'
+import type { GameMode, GameState, PlayerSetup } from './game'
 import { craftedGame, ids, num, nums, skip, wild } from './testUtils'
 
 function seededRandom(seed: number): () => number {
@@ -31,11 +31,11 @@ interface PlayResult {
 }
 
 /** Plays a whole game, checking every action is legal and no card is ever lost. */
-function playGame(levels: BotLevel[], seed: number): PlayResult {
+function playGame(levels: BotLevel[], seed: number, mode: GameMode = 'classic'): PlayResult {
   const random = seededRandom(seed * 31 + 7)
   const bots: Bot[] = levels.map((level) => createBot(level, random))
   const setups: PlayerSetup[] = levels.map((l, i) => ({ name: `Bot ${i + 1} (${l})`, isBot: true }))
-  let state = createGame(setups, seed)
+  let state = createGame(setups, seed, mode)
   let actions = 0
   const MAX_ACTIONS = 60_000
 
@@ -148,4 +148,43 @@ describe('full games between bots', () => {
       }
     }, 60_000)
   }
+})
+
+describe('full YouSee games between bots', () => {
+  const cases: Array<{ name: string; levels: BotLevel[] }> = [
+    { name: '2 players', levels: ['normal', 'normal'] },
+    { name: '3 players, mixed levels', levels: ['normal', 'easy', 'normal'] },
+  ]
+
+  for (const { name, levels } of cases) {
+    it(`${name}: 12 games finish with legal moves, no lost cards, and every winner has all ten phases`, () => {
+      for (let seed = 1; seed <= 12; seed++) {
+        const { state, rounds } = playGame(levels, seed, 'yousee')
+        expect(state.status).toBe('gameOver')
+        expect(state.winners.length).toBeGreaterThan(0)
+        for (const w of state.winners) {
+          expect(state.players[w].done.every(Boolean)).toBe(true)
+          expect(state.players[w].phase).toBe(10)
+        }
+        expect(rounds).toBeGreaterThanOrEqual(10)
+      }
+    }, 60_000)
+  }
+
+  it('lays down the biggest phase the hand can make', () => {
+    // Five 5s and two 3s can make Phase 9 (7 cards) or Phase 1 (6 cards): the bigger one is chosen.
+    const hand = [...nums(5, 5, 5, 5, 5), num(3, 'blue'), num(3, 'green'), num(1), num(2)]
+    const s = craftedGame(hand, { mode: 'yousee' })
+    const action = createBot('normal').chooseAction(s)
+    expect(action.type).toBe('layDown')
+    if (action.type === 'layDown') expect(action.phase).toBe(8)
+  })
+
+  it('never picks a phase it has already completed', () => {
+    const hand = [...nums(5, 5, 5, 5, 5), num(3, 'blue'), num(3, 'green'), num(1), num(2)]
+    const s = craftedGame(hand, { mode: 'yousee' })
+    s.players[0].done[8] = true
+    const action = createBot('normal').chooseAction(s)
+    if (action.type === 'layDown') expect(action.phase).not.toBe(8)
+  })
 })

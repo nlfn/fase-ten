@@ -1,5 +1,6 @@
 // Saves the game in the browser so a refresh or a closed tab does not lose it.
 
+import { upgradeSavedState } from '../engine'
 import type { BotLevel, GameState } from '../engine'
 
 const KEY = 'fase-ten:session:v1'
@@ -25,10 +26,8 @@ export function loadSession(): Session | null {
       return null
     }
     if (state.status === 'gameOver') return null
-    // Games saved by an earlier version have no hit history yet.
-    state.turnCount ??= 0
-    state.hits ??= []
-    state.events ??= []
+    // Games saved by an earlier version are missing newer fields.
+    upgradeSavedState(state)
     return { state, level: parsed.level }
   } catch {
     return null
