@@ -21,6 +21,9 @@
   let opponents = $state<1 | 2>(1)
   let level = $state<BotLevel>('normal')
 
+  // The date and time are shown in the viewer's own time zone.
+  const buildInfo = `${__BUILD_LABEL__}, built ${new Date(__BUILD_TIME__).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`
+
   const savedSummary = $derived(
     saved
       ? `Round ${saved.state.round}, you are on Phase ${saved.state.players[0].phase + 1}`
@@ -103,7 +106,10 @@
     </div>
   </details>
 
-  <footer>Unofficial fan project. Phase 10 is a trademark of Mattel.</footer>
+  <footer>
+    <p>Unofficial fan project. Phase 10 is a trademark of Mattel.</p>
+    <p class="build">{buildInfo}</p>
+  </footer>
 </main>
 
 <style>
@@ -267,5 +273,13 @@
   footer {
     color: var(--text-dim);
     font-size: 0.8rem;
+  }
+  footer p {
+    margin: 0;
+  }
+  .build {
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    opacity: 0.8;
   }
 </style>
