@@ -1,0 +1,82 @@
+:root {
+  --felt: #14452f;
+  --felt-deep: #0d2c1e;
+  --felt-light: #1c5a3f;
+  --gold: #ffd84d;
+  --ink: #1d2230;
+  --text: #eef5ef;
+  --text-dim: #a9c3b3;
+
+  font-family:
+    ui-rounded, 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Nunito, 'Segoe UI', system-ui, sans-serif;
+  font-size: 17px;
+  line-height: 1.4;
+  color: var(--text);
+  color-scheme: dark;
+  -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--felt-deep);
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  color: var(--text);
+  background:
+    radial-gradient(120% 90% at 50% 20%, var(--felt-light) 0%, var(--felt) 45%, var(--felt-deep) 100%) fixed;
+  overscroll-behavior: none;
+}
+
+:where(button) {
+  font: inherit;
+  font-weight: 700;
+  padding: 0.7rem 1rem;
+  border: 0;
+  border-radius: 0.7rem;
+  color: var(--text);
+  background: rgb(255 255 255 / 0.14);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+:where(button):hover:not(:disabled) {
+  background: rgb(255 255 255 / 0.22);
+}
+:where(button):disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.primary {
+  background: var(--gold);
+  color: var(--ink);
+}
+.primary:hover:not(:disabled) {
+  background: #ffe27a;
+}
+.ghost {
+  background: transparent;
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.25) inset;
+}
+
+:where(button, input, summary):focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
