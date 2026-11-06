@@ -17,6 +17,7 @@ import type { Card } from './cards'
 import { PHASE_COUNT, canHit, findPhaseLayout, phaseMissing, phaseSize } from './phases'
 import type { RunEnd } from './phases'
 import { currentPlayer, hitTargets, topDiscard } from './game'
+import { targetPhase } from './game'
 import type { Action, GameState, Player } from './game'
 
 export type BotLevel = 'easy' | 'normal'
@@ -33,7 +34,10 @@ export function createBot(level: BotLevel = 'normal', random: () => number = Mat
 
   /** The phases this player could still lay down this round. */
   function openPhases(state: GameState, me: Player): number[] {
-    if (state.mode === 'classic') return me.phase < PHASE_COUNT ? [me.phase] : []
+    if (state.mode !== 'yousee') {
+      const target = targetPhase(state, me)
+      return target === null ? [] : [target]
+    }
     return me.done.map((done, i) => (done ? -1 : i)).filter((i) => i >= 0)
   }
 

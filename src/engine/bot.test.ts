@@ -188,3 +188,17 @@ describe('full YouSee games between bots', () => {
     if (action.type === 'layDown') expect(action.phase).not.toBe(8)
   })
 })
+
+describe('full Random games between bots', () => {
+  it('12 games finish with legal moves, and every winner has completed all ten phases', () => {
+    for (let seed = 1; seed <= 12; seed++) {
+      const levels: BotLevel[] = seed % 2 ? ['normal', 'normal'] : ['normal', 'easy', 'normal']
+      const { state } = playGame(levels, seed, 'random')
+      expect(state.status).toBe('gameOver')
+      for (const w of state.winners) {
+        expect(state.players[w].done.every(Boolean)).toBe(true)
+        expect(state.players[w].phase).toBe(10)
+      }
+    }
+  }, 60_000)
+})
