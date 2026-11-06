@@ -242,6 +242,43 @@ describe('Random mode', () => {
   })
 })
 
+/** Gives the player whose turn it is one hand and the other player another, ready to play. */
+function craftedGameFrom(state: GameState, mine: Card[], theirs: Card[]): GameState {
+  const s = structuredClone(state)
+  s.players[s.current].hand = mine
+  s.players[(s.current + 1) % s.players.length].hand = theirs
+  s.stage = 'play'
+  return s
+}
+
+describe('score history', () => {
+  it('records each finished round with its points and the running totals', () => {
+    let s = craftedGame([num(1)])
+    s.players[1].hand = [num(12), num(3)]
+    s = run(s, { type: 'discard', cardId: s.players[0].hand[0].id }) // player 0 goes out
+    expect(s.status).toBe('roundOver')
+    expect(s.scoreHistory).toHaveLength(1)
+    expect(s.scoreHistory[0]).toMatchObject({ round: 1, winner: 0, points: [0, 15], totals: [0, 15] })
+
+    let n = nextRound(s)
+    expect(n.scoreHistory).toHaveLength(1) // history survives into the next round
+    n = craftedGameFrom(n, [num(2)], [num(5)])
+    n = run(n, { type: 'discard', cardId: n.players[n.current].hand[0].id })
+    expect(n.scoreHistory).toHaveLength(2)
+    expect(n.scoreHistory[1].round).toBe(2)
+    // Totals are cumulative.
+    expect(n.scoreHistory[1].totals).toEqual(n.players.map((p) => p.score))
+    expect(n.scoreHistory[1].totals[1]).toBe(15 + n.scoreHistory[1].points[1])
+  })
+
+  it('is empty at the start and filled in for older saves', () => {
+    expect(createGame(TWO_PLAYERS, 4).scoreHistory).toEqual([])
+    const old = structuredClone(createGame(TWO_PLAYERS, 4)) as unknown as Record<string, unknown>
+    delete old.scoreHistory
+    expect(upgradeSavedState(old as unknown as GameState).scoreHistory).toEqual([])
+  })
+})
+
 describe('stacked Skips', () => {
   /** Draws, then discards the first card that is not a Skip. */
   function plainTurn(state: GameState): GameState {

@@ -20,6 +20,7 @@
   import type { Action, Card, GameState, HitTarget, Meld, PlayEvent, RunEnd } from '../engine'
   import CardView from './CardView.svelte'
   import PhaseChart from './PhaseChart.svelte'
+  import Scoreboard from './Scoreboard.svelte'
   import PhasePicker from './PhasePicker.svelte'
   import type { PhaseOption } from './PhasePicker.svelte'
   import { clearSession, saveSession } from './storage'
@@ -50,6 +51,7 @@
   // Drawing and discarding clear it: they cannot be undone.
   let undoStack = $state.raw<GameState[]>([])
   let showChart = $state(false)
+  let showScores = $state(false)
   let showPicker = $state(false)
   let confirmQuit = $state(false)
   let keepPlaying = $state<HTMLButtonElement>()
@@ -374,6 +376,7 @@
     {:else}
       <p class="goal"><strong>Phase {myTarget + 1}</strong> {phaseDescription(myTarget)}</p>
     {/if}
+    <button type="button" class="ghost" onclick={() => (showScores = true)}>Scores</button>
     <button type="button" class="ghost" onclick={() => (showChart = true)}>Phases</button>
     <button type="button" class="ghost" onclick={onExit}>Menu</button>
     <button type="button" class="ghost" onclick={() => (confirmQuit = true)}>Quit</button>
@@ -538,6 +541,10 @@
     <PhaseChart {game} onClose={() => (showChart = false)} />
   {/if}
 
+  {#if showScores}
+    <Scoreboard {game} onClose={() => (showScores = false)} />
+  {/if}
+
   {#if game.status !== 'playing' && resultHidden}
     <div class="result-bar" role="status">
       <strong>{resultTitle}</strong>
@@ -623,7 +630,11 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem 0.75rem;
+    gap: 0.5rem 0.4rem;
+  }
+  .bar button {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
   }
   @media (max-width: 560px) {
     /* On a phone the goal gets its own row under the title and buttons. */
@@ -638,7 +649,7 @@
   .bar h1 {
     flex: none;
     margin: 0;
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: 800;
   }
   .goal {

@@ -40,6 +40,14 @@ export interface RoundResult {
   completed: boolean[] // who completed their phase (and so advances)
 }
 
+/** The scores at the end of one round, kept for the scoreboard. */
+export interface RoundRecord {
+  round: number // 1-based
+  winner: number | null // who went out
+  points: number[] // points each player was given this round
+  totals: number[] // each player's total score after this round
+}
+
 export type Stage = 'draw' | 'play'
 export type Status = 'playing' | 'roundOver' | 'gameOver'
 
@@ -77,6 +85,7 @@ export interface GameState {
   turnCount: number // counts every seat the turn passes to, including skipped seats
   hits: HitMark[] // recent additions to groups, used to highlight them
   events: PlayEvent[] // recent plays this round, oldest first
+  scoreHistory: RoundRecord[] // one entry per finished round, oldest first
 }
 
 export type Action =
@@ -150,6 +159,7 @@ export function createGame(
     turnCount: 0,
     hits: [],
     events: [],
+    scoreHistory: [],
   }
   if (mode === 'random') {
     // Each player gets their own order. It is never shown, only the phase they are on.
@@ -247,6 +257,12 @@ function endRound(state: GameState, winner: number | null): void {
     }
   })
   state.roundResult = { winner, points, completed }
+  state.scoreHistory.push({
+    round: state.round,
+    winner,
+    points,
+    totals: state.players.map((p) => p.score),
+  })
 
   if (winner !== null) addLog(state, `${state.players[winner].name} went out`)
 
@@ -406,6 +422,7 @@ export function upgradeSavedState(state: GameState): GameState {
   state.turnCount ??= 0
   state.hits ??= []
   state.events ??= []
+  state.scoreHistory ??= []
   state.mode ??= 'classic'
   for (const p of state.players) {
     p.order ??= Array.from({ length: PHASE_COUNT }, (_, i) => i)
