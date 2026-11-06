@@ -72,7 +72,13 @@
   const top = $derived(topDiscard(game))
   const canDrawDeck = $derived(myTurn && game.stage === 'draw')
   const canTakeDiscard = $derived(myTurn && canPickUpDiscard(game))
-  const canLay = $derived(myTurn && game.stage === 'play' && !me.laidDown)
+  // Lay down stays grey until the cards (the selection, if any, else the whole hand) make a phase
+  // the player may lay down: the current phase, or in YouSee any phase not completed yet.
+  const canLay = $derived.by(() => {
+    if (!myTurn || game.stage !== 'play' || me.laidDown) return false
+    if (targetPhase(game, me) === null && !yousee) return false
+    return PHASES.some((_, i) => (yousee ? !me.done[i] : i === myTarget) && layoutFor(i) !== null)
+  })
   const sortedHand = $derived(sortHand(me.hand, sortMode))
   // Cards added to a group during the last full lap of the table, shown with an outline.
   const markedIds = $derived(recentHitIds(game))
