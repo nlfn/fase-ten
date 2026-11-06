@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { PHASES } from '../engine'
+  import { PHASES, targetPhase } from '../engine'
   import type { GameState } from '../engine'
 
   interface Props {
@@ -20,7 +20,7 @@
     const p = game.players[playerIndex]
     if (p.done[phaseIndex]) return 'done'
     if (p.laidDown && p.laidPhase === phaseIndex) return 'laid'
-    if (game.mode === 'classic' && p.phase === phaseIndex) return 'now'
+    if (targetPhase(game, p) === phaseIndex) return 'now'
     return 'open'
   }
 
@@ -45,7 +45,9 @@
     <p>
       {game.mode === 'yousee'
         ? 'Each player can complete the phases in any order, once each.'
-        : 'Players work through the phases in order.'}
+        : game.mode === 'random'
+          ? 'Each player has their own secret order. You can only see the phase each player is on.'
+          : 'Players work through the phases in order.'}
     </p>
     <div class="scroll">
       <table>
@@ -89,7 +91,7 @@
     <p class="legend">
       <span><b class="done">✓</b> completed</span>
       <span><b class="laid">●</b> laid down this round</span>
-      {#if game.mode === 'classic'}<span><b class="now">▸</b> working on it</span>{/if}
+      {#if game.mode !== 'yousee'}<span><b class="now">▸</b> working on it</span>{/if}
     </p>
     <button type="button" class="primary" bind:this={closeButton} onclick={onClose}>Close</button>
   </div>

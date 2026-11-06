@@ -8,6 +8,7 @@ import {
   hitTargets,
   nextRound,
   recentHitIds,
+  targetPhase,
   topDiscard,
   upgradeSavedState,
 } from './game'
@@ -62,7 +63,7 @@ describe('createGame', () => {
       const s = createGame(TWO_PLAYERS, seed)
       if (topDiscard(s)?.kind === 'skip') {
         expect(s.current).toBe(1)
-        expect(s.players[0].skipped).toBe(false)
+        expect(s.players[0].skipsPending).toBe(0)
         return
       }
     }
@@ -135,7 +136,7 @@ describe('Skip cards', () => {
     const after = run(s, { type: 'discard', cardId: sk.id })
     expect(after.current).toBe(0)
     expect(after.stage).toBe('draw')
-    expect(after.players[1].skipped).toBe(false)
+    expect(after.players[1].skipsPending).toBe(0)
     expect(topDiscard(after)?.kind).toBe('skip')
   })
 
@@ -150,7 +151,161 @@ describe('Skip cards', () => {
 
     const skipSecond = run(s, { type: 'discard', cardId: sk.id, skipTarget: 2 })
     expect(skipSecond.current).toBe(1)
-    expect(skipSecond.players[2].skipped).toBe(true)
+    expect(skipSecond.players[2].skipsPending).toBe(1)
+  })
+})
+
+describe('Random mode', () => {
+  const identity = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  const sorted = (a: number[]) => a.slice().sort((x, y) => x - y)
+
+  it('gives every player a secret order that covers all ten phases exactly once', () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const s = createGame(THREE_PLAYERS, seed, 'random')
+      for (const p of s.players) expect(sorted(p.order)).toEqual(identity)
+    }
+  })
+
+  it('shuffles differently for different players and is repeatable for a seed', () => {
+    const a = createGame(THREE_PLAYERS, 7, 'random')
+    const b = createGame(THREE_PLAYERS, 7, 'random')
+    expect(a.players.map((p) => p.order)).toEqual(b.players.map((p) => p.order))
+    const distinct = new Set(a.players.map((p) => p.order.join(',')))
+    expect(distinct.size).toBeGreaterThan(1)
+    // Across many games the first phase handed out should vary.
+    const firsts = new Set<number>()
+    for (let seed = 1; seed <= 40; seed++) firsts.add(createGame(TWO_PLAYERS, seed, 'random').players[0].order[0])
+    expect(firsts.size).toBeGreaterThan(4)
+  })
+
+  it('keeps the plain 1 to 10 order in the other modes', () => {
+    for (const mode of ['classic', 'yousee'] as const) {
+      const s = createGame(TWO_PLAYERS, 3, mode)
+      for (const p of s.players) expect(p.order).toEqual(identity)
+    }
+  })
+
+  it('targets the phase at the player\'s position in their own order', () => {
+    const s = createGame(TWO_PLAYERS, 5, 'random')
+    s.players[0].order = [4, 0, 1, 2, 3, 5, 6, 7, 8, 9]
+    expect(targetPhase(s, s.players[0])).toBe(4)
+    s.players[0].phase = 1
+    expect(targetPhase(s, s.players[0])).toBe(0)
+    s.players[0].phase = 10
+    expect(targetPhase(s, s.players[0])).toBeNull()
+    expect(targetPhase({ mode: 'yousee' }, s.players[0])).toBeNull()
+  })
+
+  const twoSets = () => [...nums(5, 5, 5, 9, 9, 9)]
+
+  it('only accepts the phase the player was given', () => {
+    const hand = twoSets()
+    let s = craftedGame(hand, { mode: 'random' })
+    s.players[0].order = [4, 0, 1, 2, 3, 5, 6, 7, 8, 9] // starts on Phase 5, a run of 8
+    expect(error(s, { type: 'layDown', groups: [ids(hand.slice(0, 3)), ids(hand.slice(3, 6))] })).toMatch(/do not make Phase 5/i)
+    s.players[0].order = [0, 4, 1, 2, 3, 5, 6, 7, 8, 9] // starts on Phase 1
+    s = run(s, { type: 'layDown', groups: [ids(hand.slice(0, 3)), ids(hand.slice(3, 6))] })
+    expect(s.players[0].laidPhase).toBe(0)
+  })
+
+  it('moves a player who completed their phase on to the next one in their order', () => {
+    const hand = twoSets()
+    let s = craftedGame(hand, { mode: 'random' })
+    s.players[0].order = [0, 6, 1, 2, 3, 4, 5, 7, 8, 9]
+    s = run(s, { type: 'layDown', groups: [ids(hand.slice(0, 3)), ids(hand.slice(3, 6))] })
+    expect(s.status).toBe('roundOver') // went out by laying everything down
+    expect(s.players[0].done[0]).toBe(true)
+    expect(s.players[0].phase).toBe(1)
+    expect(targetPhase(s, s.players[0])).toBe(6)
+    const next = nextRound(s)
+    expect(targetPhase(next, next.players[0])).toBe(6)
+  })
+
+  it('makes a player who did not complete their phase try the same one again', () => {
+    const hand = twoSets()
+    let s = craftedGame(hand, { mode: 'random' })
+    s.players[0].order = [0, 6, 1, 2, 3, 4, 5, 7, 8, 9]
+    s.players[1].order = [3, 0, 1, 2, 4, 5, 6, 7, 8, 9]
+    s = run(s, { type: 'layDown', groups: [ids(hand.slice(0, 3)), ids(hand.slice(3, 6))] })
+    expect(s.players[1].phase).toBe(0)
+    const next = nextRound(s)
+    expect(targetPhase(next, next.players[1])).toBe(3)
+    expect(next.players[1].done.some(Boolean)).toBe(false)
+  })
+
+  it('upgrades an older save by giving it the plain order', () => {
+    const s = createGame(TWO_PLAYERS, 2)
+    const old = structuredClone(s) as unknown as { players: Array<Record<string, unknown>> }
+    for (const p of old.players) delete p.order
+    const up = upgradeSavedState(old as unknown as GameState)
+    expect(up.players[0].order).toEqual(identity)
+  })
+})
+
+describe('stacked Skips', () => {
+  /** Draws, then discards the first card that is not a Skip. */
+  function plainTurn(state: GameState): GameState {
+    let t = run(state, { type: 'drawDeck' })
+    const card = t.players[t.current].hand.find((c) => c.kind !== 'skip')!
+    return run(t, { type: 'discard', cardId: card.id })
+  }
+
+  it('two Skips on the same player make them lose two turns', () => {
+    // Player 0 skips player 2, then player 1 also skips player 2, before player 2 has played.
+    let s = craftedGame([skip(), ...nums(1, 2, 3)], { setups: THREE_PLAYERS })
+    s.players[1].hand = [skip(), ...nums(4, 5, 6)]
+    s = run(s, { type: 'discard', cardId: s.players[0].hand[0].id, skipTarget: 2 })
+    expect(s.current).toBe(1)
+    expect(s.players[2].skipsPending).toBe(1)
+
+    s = run(s, { type: 'drawDeck' })
+    const second = s.players[1].hand.find((c) => c.kind === 'skip')!
+    s = run(s, { type: 'discard', cardId: second.id, skipTarget: 2 })
+    // Player 2 is passed over right away (first lost turn) and one more is still owed.
+    expect(s.current).toBe(0)
+    expect(s.players[2].skipsPending).toBe(1)
+
+    const order: number[] = []
+    for (let i = 0; i < 4; i++) {
+      s = plainTurn(s)
+      order.push(s.current)
+    }
+    // 0 plays, then 1; 1 plays, then player 2 is passed over a second time, back to 0; then 1; then 2 finally plays.
+    expect(order).toEqual([1, 0, 1, 2])
+    expect(s.players[2].skipsPending).toBe(0)
+  })
+
+  it('shows both lost turns in the history', () => {
+    let s = craftedGame([skip(), ...nums(1, 2, 3)], { setups: THREE_PLAYERS })
+    s.players[1].hand = [skip(), ...nums(4, 5, 6)]
+    s = run(s, { type: 'discard', cardId: s.players[0].hand[0].id, skipTarget: 2 })
+    s = run(s, { type: 'drawDeck' })
+    s = run(s, { type: 'discard', cardId: s.players[1].hand.find((c) => c.kind === 'skip')!.id, skipTarget: 2 })
+    for (let i = 0; i < 2; i++) s = plainTurn(s)
+    expect(s.events.filter((e) => e.kind === 'skipped' && e.player === 2)).toHaveLength(2)
+  })
+
+  it('a single Skip still costs exactly one turn', () => {
+    let s = craftedGame([skip(), ...nums(1, 2, 3)], { setups: THREE_PLAYERS })
+    s = run(s, { type: 'discard', cardId: s.players[0].hand[0].id, skipTarget: 1 })
+    expect(s.current).toBe(2)
+    s = plainTurn(s)
+    expect(s.current).toBe(0)
+    s = plainTurn(s)
+    expect(s.current).toBe(1)
+  })
+
+  it('upgrades an older save that stored a yes/no flag', () => {
+    const s = createGame(THREE_PLAYERS, 5)
+    const old = structuredClone(s) as unknown as { players: Array<Record<string, unknown>> }
+    for (const p of old.players) {
+      delete p.skipsPending
+      p.skipped = false
+    }
+    old.players[1].skipped = true
+    const up = upgradeSavedState(old as unknown as GameState)
+    expect(up.players.map((p) => p.skipsPending)).toEqual([0, 1, 0])
+    expect('skipped' in up.players[1]).toBe(false)
   })
 })
 

@@ -17,18 +17,20 @@ import type { Meld, RunEnd } from './phases'
 /**
  * classic: you work through the ten phases in order.
  * yousee: when you lay down, you choose which of the phases you have not done yet.
+ * random: like classic, but each player gets their own secret random order for the ten phases.
  */
-export type GameMode = 'classic' | 'yousee'
+export type GameMode = 'classic' | 'yousee' | 'random'
 
 export interface Player {
   name: string
   isBot: boolean
   hand: Card[]
   phase: number // classic: index 0..9 of the phase being attempted. Always the number of phases completed; 10 means all done
+  order: number[] // the order this player works through the phases (0..9). 1 to 10 in classic, secretly shuffled in random
   done: boolean[] // which of the ten phases this player has completed
   laidPhase: number | null // the phase laid down this round (counts as done when the round ends)
   laidDown: boolean // has laid down this round
-  skipped: boolean // loses their next turn
+  skipsPending: number // how many of their upcoming turns they will lose; each Skip played on them adds one
   score: number // lower is better
 }
 
@@ -126,10 +128,11 @@ export function createGame(
       isBot: p.isBot,
       hand: [],
       phase: 0,
+      order: Array.from({ length: PHASE_COUNT }, (_, i) => i),
       done: Array.from({ length: PHASE_COUNT }, () => false),
       laidPhase: null,
       laidDown: false,
-      skipped: false,
+      skipsPending: 0,
       score: 0,
     })),
     drawPile: [],
@@ -148,8 +151,25 @@ export function createGame(
     hits: [],
     events: [],
   }
+  if (mode === 'random') {
+    // Each player gets their own order. It is never shown, only the phase they are on.
+    for (const p of state.players) {
+      const shuffled = shuffleWithSeed(p.order, state.rngSeed)
+      state.rngSeed = shuffled.seed
+      p.order = shuffled.items
+    }
+  }
   dealRound(state)
   return state
+}
+
+/**
+ * The phase this player has to lay down this round, as an index 0..9. Null in YouSee
+ * (they choose) and once they have completed everything.
+ */
+export function targetPhase(state: Pick<GameState, 'mode'>, player: Player): number | null {
+  if (state.mode === 'yousee') return null
+  return player.phase < PHASE_COUNT ? player.order[player.phase] : null
 }
 
 /** Starts the next round after a round has ended. Returns the same state if the round is not over. */
@@ -170,7 +190,7 @@ function dealRound(state: GameState): void {
     p.hand = deck.splice(0, HAND_SIZE)
     p.laidDown = false
     p.laidPhase = null
-    p.skipped = false
+    p.skipsPending = 0
   }
   const starter = deck.pop() as Card
   state.discardPile = [starter]
@@ -183,7 +203,7 @@ function dealRound(state: GameState): void {
 
   addLog(state, `Round ${state.round} begins`)
   const first = (state.round - 1) % state.players.length
-  if (starter.kind === 'skip') state.players[first].skipped = true
+  if (starter.kind === 'skip') state.players[first].skipsPending = 1
   beginTurn(state, first)
 }
 
@@ -192,8 +212,8 @@ function beginTurn(state: GameState, index: number): void {
   const n = state.players.length
   let i = index
   state.turnCount += 1
-  for (let guard = 0; guard < n && state.players[i].skipped; guard++) {
-    state.players[i].skipped = false
+  for (let guard = 0; guard < n && state.players[i].skipsPending > 0; guard++) {
+    state.players[i].skipsPending -= 1
     addLog(state, `${state.players[i].name} is skipped`)
     addEvent(state, { player: i, kind: 'skipped' })
     i = (i + 1) % n
@@ -222,7 +242,7 @@ function endRound(state: GameState, winner: number | null): void {
     p.score += points[i]
     if (p.laidDown) {
       // In classic mode the phase laid down is always the current one.
-      p.done[p.laidPhase ?? p.phase] = true
+      p.done[p.laidPhase ?? targetPhase(state, p) ?? 0] = true
       p.phase = p.done.filter(Boolean).length
     }
   })
@@ -294,8 +314,12 @@ export function applyAction(state: GameState, action: Action): ActionResult {
         }
         groups.push(cards)
       }
-      let phaseIdx = player.phase
-      if (s.mode === 'yousee') {
+      let phaseIdx: number
+      if (s.mode !== 'yousee') {
+        const target = targetPhase(s, player)
+        if (target === null) return fail('You have already completed every phase')
+        phaseIdx = target
+      } else {
         const chosen = action.phase
         if (chosen === undefined || !Number.isInteger(chosen) || chosen < 0 || chosen >= PHASE_COUNT) {
           return fail('Choose which phase you are laying down')
@@ -359,7 +383,7 @@ export function applyAction(state: GameState, action: Action): ActionResult {
       player.hand.splice(idx, 1)
       s.discardPile.push(card)
       if (target !== null) {
-        s.players[target].skipped = true
+        s.players[target].skipsPending += 1
         addLog(s, `${player.name} played Skip on ${s.players[target].name}`)
         addEvent(s, { player: s.current, kind: 'skip', card, target })
       } else {
@@ -384,8 +408,13 @@ export function upgradeSavedState(state: GameState): GameState {
   state.events ??= []
   state.mode ??= 'classic'
   for (const p of state.players) {
+    p.order ??= Array.from({ length: PHASE_COUNT }, (_, i) => i)
     p.done ??= Array.from({ length: PHASE_COUNT }, (_, i) => i < p.phase)
     p.laidPhase ??= p.laidDown ? Math.min(p.phase, PHASE_COUNT - 1) : null
+    // Older saves kept a yes/no flag called `skipped`.
+    const legacy = p as unknown as { skipped?: boolean }
+    p.skipsPending ??= legacy.skipped ? 1 : 0
+    delete legacy.skipped
   }
   return state
 }

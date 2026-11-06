@@ -42,7 +42,7 @@ export function craftedGame(
   const s = structuredClone(createGame(setups, seed, mode))
   s.current = player
   s.stage = 'play'
-  for (const p of s.players) p.skipped = false
+  for (const p of s.players) p.skipsPending = 0
   s.players[player].hand = hand
   s.players[player].phase = phase
   // In classic mode the earlier phases are done. In yousee, tests set `done` themselves.

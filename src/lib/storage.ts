@@ -69,7 +69,7 @@ export function parseSettings(raw: unknown): Partial<Settings> {
   if (typeof r.name === 'string' && r.name.trim() !== '') out.name = r.name.trim().slice(0, 16)
   if (r.opponents === 1 || r.opponents === 2) out.opponents = r.opponents
   if (r.level === 'easy' || r.level === 'normal') out.level = r.level
-  if (r.mode === 'classic' || r.mode === 'yousee') out.mode = r.mode
+  if (r.mode === 'classic' || r.mode === 'yousee' || r.mode === 'random') out.mode = r.mode
   return out
 }
 

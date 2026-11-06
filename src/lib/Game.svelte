@@ -2,6 +2,7 @@
   import {
     PHASES,
     PHASE_COUNT,
+    targetPhase,
     applyAction,
     arrangeSelection,
     canPickUpDiscard,
@@ -61,6 +62,8 @@
   const HUMAN = 0
   const yousee = $derived(game.mode === 'yousee')
   const me = $derived(game.players[HUMAN])
+  // The phase you are working on in classic and random games (0 once you have finished them all).
+  const myTarget = $derived(targetPhase(game, me) ?? 0)
   const cur = $derived(currentPlayer(game))
   const myTurn = $derived(game.status === 'playing' && game.current === HUMAN)
   const top = $derived(topDiscard(game))
@@ -94,7 +97,7 @@
     if (!me.laidDown) {
       return yousee
         ? 'Lay down any phase you have not completed when you can, then discard one card.'
-        : `Lay down Phase ${me.phase + 1} (${phaseDescription(me.phase)}) when you can, then discard one card.`
+        : `Lay down Phase ${myTarget + 1} (${phaseDescription(myTarget)}) when you can, then discard one card.`
     }
     return 'Pick a card to add to a group on the table, or discard one card to end your turn.'
   })
@@ -221,15 +224,15 @@
     let groups: Card[][] | null
     // One selected card can never be a whole phase, so a single card means "find it for me".
     if (selectedCards.length > 1) {
-      groups = arrangeSelection(selectedCards, me.phase)
+      groups = arrangeSelection(selectedCards, myTarget)
       if (!groups) {
-        notice = `Those cards do not make Phase ${me.phase + 1} (${phaseDescription(me.phase)}).`
+        notice = `Those cards do not make Phase ${myTarget + 1} (${phaseDescription(myTarget)}).`
         return
       }
     } else {
-      groups = findPhaseLayout(me.hand, me.phase, game.melds)
+      groups = findPhaseLayout(me.hand, myTarget, game.melds)
       if (!groups) {
-        notice = `You can't lay down yet. Phase ${me.phase + 1} needs ${phaseDescription(me.phase)}.`
+        notice = `You can't lay down yet. Phase ${myTarget + 1} needs ${phaseDescription(myTarget)}.`
         return
       }
     }
@@ -319,7 +322,7 @@
 
   /** The short progress line shown in a player's panel. */
   function progress(p: GameState['players'][number]): string {
-    return yousee ? `${p.phase} of ${PHASE_COUNT} done` : phaseLabel(p.phase)
+    return yousee ? `${p.phase} of ${PHASE_COUNT} done` : phaseLabel(targetPhase(game, p) ?? PHASE_COUNT)
   }
 
   /** What a player is after right now, shown under their stats. */
@@ -328,7 +331,8 @@
       return `Laid down Phase ${p.laidPhase + 1}: ${phaseDescription(p.laidPhase)}`
     }
     if (yousee) return ''
-    return p.phase < PHASE_COUNT ? phaseDescription(p.phase) : ''
+    const target = targetPhase(game, p)
+    return target === null ? '' : phaseDescription(target)
   }
 </script>
 
@@ -365,7 +369,7 @@
     {:else if yousee}
       <p class="goal"><strong>Your choice</strong> {me.phase} of {PHASE_COUNT} phases done</p>
     {:else}
-      <p class="goal"><strong>Phase {Math.min(me.phase + 1, PHASE_COUNT)}</strong> {phaseDescription(me.phase)}</p>
+      <p class="goal"><strong>Phase {myTarget + 1}</strong> {phaseDescription(myTarget)}</p>
     {/if}
     <button type="button" class="ghost" onclick={() => (showChart = true)}>Phases</button>
     <button type="button" class="ghost" onclick={onExit}>Menu</button>
@@ -382,7 +386,9 @@
         <div class="phead">
           <span class="pname">{p.name}</span>
           {#if p.laidDown}<span class="badge ok">Laid down</span>{/if}
-          {#if p.skipped}<span class="badge warn">Loses a turn</span>{/if}
+          {#if p.skipsPending > 0}
+            <span class="badge warn">{p.skipsPending > 1 ? `Loses ${p.skipsPending} turns` : 'Loses a turn'}</span>
+          {/if}
         </div>
         <div class="pstats">
           <span>{progress(p)}</span>
@@ -559,7 +565,7 @@
                   {:else if yousee}
                     {progress(p)}
                   {:else}
-                    {phaseLabel(p.phase)}{game.roundResult?.completed[i] ? '' : ' (repeat)'}
+                    {progress(p)}{game.roundResult?.completed[i] ? '' : ' (repeat)'}
                   {/if}
                   {#if yousee && game.roundResult?.completed[i] && p.laidPhase !== null}
                     <span class="sub">Completed Phase {p.laidPhase + 1}</span>

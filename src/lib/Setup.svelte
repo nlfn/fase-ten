@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { PHASES } from '../engine'
+  import { PHASES, targetPhase } from '../engine'
   import type { BotLevel, GameMode } from '../engine'
   import { loadSettings, saveSettings } from './storage'
   import type { Session } from './storage'
@@ -35,7 +35,9 @@
     if (saved.state.mode === 'yousee') {
       return `YouSee, round ${saved.state.round}, ${me.phase} of 10 phases done`
     }
-    return `Round ${saved.state.round}, you are on Phase ${me.phase + 1}`
+    const target = targetPhase(saved.state, me)
+    const label = saved.state.mode === 'random' ? 'Random, round' : 'Round'
+    return `${label} ${saved.state.round}, you are on Phase ${(target ?? 0) + 1}`
   })
 
   function submit(event: SubmitEvent) {
@@ -70,14 +72,19 @@
 
     <fieldset>
       <legend>Game</legend>
-      <div class="segment">
+      <div class="segment wide">
         <label><input type="radio" name="mode" value="classic" bind:group={mode} /><span>Fase Ten</span></label>
         <label><input type="radio" name="mode" value="yousee" bind:group={mode} /><span>Fase Ten YouSee</span></label>
+        <label><input type="radio" name="mode" value="random" bind:group={mode} /><span>Fase Ten Random</span></label>
       </div>
       <p class="hint">
-        {mode === 'classic'
-          ? 'The classic game. Work through the ten phases in order.'
-          : 'Like Yahtzee. Each time you lay down, you choose which phase you are completing. Do them in any order, but each phase only once.'}
+        {#if mode === 'classic'}
+          The classic game. Work through the ten phases in order.
+        {:else if mode === 'yousee'}
+          Like Yahtzee. Each time you lay down, you choose which phase you are completing. Do them in any order, but each phase only once.
+        {:else}
+          Everyone gets their own secret random order for the ten phases. You only see the phase you are on. Miss it and you try it again next round.
+        {/if}
       </p>
     </fieldset>
 
@@ -117,6 +124,11 @@
         <strong>Fase Ten YouSee:</strong> the same game, but you are not locked to the next phase. When you lay
         down, you pick any phase you have not completed yet, and it is decided once the cards are down. Finish all
         ten in any order. The Phase chart button shows what each player has completed.
+      </p>
+      <p>
+        <strong>Fase Ten Random:</strong> like the classic game, but each player has their own secret random order
+        for the ten phases, so everyone is usually on a different phase. You only ever see the phase each player is on
+        right now. If you do not complete it, you try the same phase again next round.
       </p>
       <ul>
         <li><strong>Set:</strong> cards with the same number.</li>
@@ -218,6 +230,9 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0.5rem;
+  }
+  .segment.wide {
+    grid-template-columns: 1fr;
   }
   .segment label {
     position: relative;
