@@ -162,6 +162,19 @@ describe('hitting', () => {
 })
 
 describe('findPhaseLayout', () => {
+  it('keeps the pair that leaves a card to add (phase 9: 1s with a Wild, then 3s rather than 5s)', () => {
+    const hand = [
+      ...[1, 1, 1, 1].map((v) => num(v)),
+      ...[3, 3, 3].map((v) => num(v, 'blue')),
+      ...[5, 5].map((v) => num(v, 'green')),
+      wild(),
+    ]
+    const layout = findPhaseLayout(hand, 8)!
+    const values = layout.map((g) => g.filter((c) => c.kind === 'number').map((c) => (c as { value: number }).value))
+    expect(values.flat().filter((v) => v === 3)).toHaveLength(2)
+    expect(values.flat().filter((v) => v === 5)).toHaveLength(0)
+  })
+
   it('finds two sets of 3 and leaves the rest', () => {
     const hand: Card[] = [...nums(5, 5, 5, 9, 9, 9), num(1), num(2), num(12), skip()]
     const layout = findPhaseLayout(hand, 0)

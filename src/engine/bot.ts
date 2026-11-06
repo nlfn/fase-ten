@@ -51,7 +51,7 @@ export function createBot(level: BotLevel = 'normal', random: () => number = Mat
 
     if (!me.laidDown) {
       if (phaseMissing(me.hand, me.phase) === 0) {
-        const layout = findPhaseLayout(me.hand, me.phase)
+        const layout = findPhaseLayout(me.hand, me.phase, state.melds)
         if (layout) return { type: 'layDown', groups: layout.map((g) => g.map((c) => c.id)) }
       }
     } else if (!mistake()) {

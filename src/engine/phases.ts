@@ -292,32 +292,82 @@ export function* combinations<T>(items: readonly T[], k: number): Generator<T[]>
 
 interface Layout {
   groups: Card[][]
+  stuck: number // cards that could not be played onto any group afterwards
   wilds: number
-  leftover: number
+  points: number // points left in hand after the follow-up plays
+}
+
+/**
+ * Counts what would still be in hand after laying down and then adding every
+ * card that fits onto the new groups (and the groups already on the table).
+ * Naturals go first so a Wild is only spent where nothing else fits.
+ */
+function afterPlays(
+  bodies: readonly MeldBody[],
+  rest: readonly Card[],
+  table: readonly Meld[],
+): { stuck: number; points: number } {
+  const melds: MeldBody[] = [...bodies, ...table].map((m) => ({ ...m, cards: m.cards.slice() }))
+  let left = rest.filter((c) => c.kind !== 'skip')
+  const fixed = rest.filter((c) => c.kind === 'skip')
+
+  const place = (cards: Card[]): boolean => {
+    let placed = false
+    for (const c of cards) {
+      const target = melds.find((m) => canHit(m, c))
+      if (target && hitMeld(target as Meld, c)) {
+        left = left.filter((x) => x.id !== c.id)
+        placed = true
+      }
+    }
+    return placed
+  }
+
+  while (place(left.filter((c) => c.kind === 'number'))) {
+    // keep going: one added card can open the way for another (runs)
+  }
+  place(left.filter((c) => c.kind === 'wild'))
+  while (place(left.filter((c) => c.kind === 'number'))) {
+    // a Wild may have extended a run far enough to take more naturals
+  }
+
+  const remaining = [...left, ...fixed]
+  return { stuck: remaining.length, points: handPoints(remaining) }
 }
 
 /**
  * Finds a way to lay down the phase using exactly the minimum cards for each
- * group. Prefers layouts that spend the fewest Wilds, then leave the fewest
- * points in hand. Returns null when the hand cannot make the phase.
+ * group. Among the possible layouts it prefers the one that leaves the most
+ * cards playable afterwards (added onto the new groups or those already on the
+ * table), then the one that spends the fewest Wilds, then the fewest points
+ * left in hand. Returns null when the hand cannot make the phase.
  */
-export function findPhaseLayout(hand: readonly Card[], phaseIdx: number): Card[][] | null {
+export function findPhaseLayout(
+  hand: readonly Card[],
+  phaseIdx: number,
+  table: readonly Meld[] = [],
+): Card[][] | null {
   const specs = PHASES[phaseIdx]?.groups
   if (!specs) return null
   const playable = hand.filter((c) => c.kind !== 'skip')
-  const total = handPoints(hand)
   const search: { best: Layout | null } = { best: null }
   const chosen: Card[][] = []
 
   const recurse = (specIdx: number, remaining: Card[]) => {
     if (specIdx === specs.length) {
-      const used = chosen.flat()
-      const wilds = used.filter((c) => c.kind === 'wild').length
-      const leftover = total - handPoints(used)
+      const bodies = matchPhase(phaseIdx, chosen)
+      if (!bodies) return
+      const used = new Set(chosen.flat().map((c) => c.id))
+      const rest = hand.filter((c) => !used.has(c.id))
+      const wilds = chosen.flat().filter((c) => c.kind === 'wild').length
+      const { stuck, points } = afterPlays(bodies, rest, table)
       const best = search.best
-      if (!best || wilds < best.wilds || (wilds === best.wilds && leftover < best.leftover)) {
-        search.best = { groups: chosen.map((g) => g.slice()), wilds, leftover }
-      }
+      const better =
+        !best ||
+        stuck < best.stuck ||
+        (stuck === best.stuck &&
+          (wilds < best.wilds || (wilds === best.wilds && points < best.points)))
+      if (better) search.best = { groups: chosen.map((g) => g.slice()), stuck, wilds, points }
       return
     }
     const spec = specs[specIdx]

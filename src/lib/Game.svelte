@@ -40,6 +40,9 @@
   // The first tap on a card then starts a fresh selection instead of adding to it.
   let autoSelected = $state(false)
   let continueButton = $state<HTMLButtonElement>()
+  // States from before each lay down or hit this turn, so those moves can be taken back.
+  // Drawing and discarding clear it: they cannot be undone.
+  let undoStack = $state.raw<GameState[]>([])
 
   const HUMAN = 0
   const me = $derived(game.players[HUMAN])
@@ -139,6 +142,11 @@
       if (drawn) next = [drawn.id]
     }
     autoSelected = next.length > 0
+    if ((action.type === 'layDown' || action.type === 'hit') && result.state.status === 'playing') {
+      undoStack = [...undoStack, game]
+    } else {
+      undoStack = []
+    }
     game = result.state
     notice = ''
     selectedIds = next
@@ -170,13 +178,23 @@
         return
       }
     } else {
-      groups = findPhaseLayout(me.hand, me.phase)
+      groups = findPhaseLayout(me.hand, me.phase, game.melds)
       if (!groups) {
         notice = `You can't lay down yet. Phase ${me.phase + 1} needs ${phaseDescription(me.phase)}.`
         return
       }
     }
     dispatch({ type: 'layDown', groups: groups.map((g) => g.map((c) => c.id)) })
+  }
+
+  function undo() {
+    const previous = undoStack[undoStack.length - 1]
+    if (!previous || !myTurn) return
+    undoStack = undoStack.slice(0, -1)
+    game = previous
+    selectedIds = []
+    autoSelected = false
+    notice = ''
   }
 
   function hit(meldId: number, end?: RunEnd) {
@@ -196,6 +214,7 @@
 
   function startNextRound() {
     game = nextRound(game)
+    undoStack = []
     selectedIds = []
     autoSelected = false
     notice = ''
@@ -341,6 +360,9 @@
         </button>
       {/if}
       <button type="button" disabled={!canDiscard} onclick={discardSelected}>Discard</button>
+      {#if myTurn && undoStack.length > 0}
+        <button type="button" onclick={undo}>Undo last move</button>
+      {/if}
       <button type="button" class="ghost" onclick={() => (sortMode = sortMode === 'number' ? 'color' : 'number')}>
         Sort by {sortMode === 'number' ? 'color' : 'number'}
       </button>
