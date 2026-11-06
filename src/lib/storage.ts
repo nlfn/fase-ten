@@ -1,7 +1,7 @@
 // Saves the game in the browser so a refresh or a closed tab does not lose it.
 
 import { upgradeSavedState } from '../engine'
-import type { BotLevel, GameState } from '../engine'
+import type { BotLevel, GameMode, GameState } from '../engine'
 
 const KEY = 'fase-ten:session:v1'
 
@@ -47,5 +47,45 @@ export function clearSession(): void {
     localStorage.removeItem(KEY)
   } catch {
     // Nothing to do.
+  }
+}
+
+// The name and options from the last game started, so the next one starts with the same choices.
+
+const SETTINGS_KEY = 'fase-ten:settings:v1'
+
+export interface Settings {
+  name: string
+  opponents: 1 | 2
+  level: BotLevel
+  mode: GameMode
+}
+
+/** Checks a stored value field by field; anything missing or odd is left out. */
+export function parseSettings(raw: unknown): Partial<Settings> {
+  if (typeof raw !== 'object' || raw === null) return {}
+  const r = raw as Record<string, unknown>
+  const out: Partial<Settings> = {}
+  if (typeof r.name === 'string' && r.name.trim() !== '') out.name = r.name.trim().slice(0, 16)
+  if (r.opponents === 1 || r.opponents === 2) out.opponents = r.opponents
+  if (r.level === 'easy' || r.level === 'normal') out.level = r.level
+  if (r.mode === 'classic' || r.mode === 'yousee') out.mode = r.mode
+  return out
+}
+
+export function loadSettings(): Partial<Settings> {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY)
+    return raw ? parseSettings(JSON.parse(raw)) : {}
+  } catch {
+    return {}
+  }
+}
+
+export function saveSettings(settings: Settings): void {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
+  } catch {
+    // Not being able to remember the choices is not worth interrupting the game.
   }
 }
