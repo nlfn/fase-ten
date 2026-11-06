@@ -72,7 +72,13 @@
   const top = $derived(topDiscard(game))
   const canDrawDeck = $derived(myTurn && game.stage === 'draw')
   const canTakeDiscard = $derived(myTurn && canPickUpDiscard(game))
-  const canLay = $derived(myTurn && game.stage === 'play' && !me.laidDown)
+  // Lay down stays grey until the cards (the selection, if any, else the whole hand) make a phase
+  // the player may lay down: the current phase, or in YouSee any phase not completed yet.
+  const canLay = $derived.by(() => {
+    if (!myTurn || game.stage !== 'play' || me.laidDown) return false
+    if (targetPhase(game, me) === null && !yousee) return false
+    return PHASES.some((_, i) => (yousee ? !me.done[i] : i === myTarget) && layoutFor(i) !== null)
+  })
   const sortedHand = $derived(sortHand(me.hand, sortMode))
   // Cards added to a group during the last full lap of the table, shown with an outline.
   const markedIds = $derived(recentHitIds(game))
@@ -334,7 +340,12 @@
   }
 
   // One row per turn, newest first. Older turns scroll.
-  const history = $derived(groupTurns(game.events).reverse().slice(0, 14))
+  const allTurns = $derived(groupTurns(game.events).reverse())
+  // Show only one player's turns when a name chip is picked (null means everyone).
+  let historyFilter = $state<number | null>(null)
+  const history = $derived(
+    historyFilter === null ? allTurns.slice(0, 14) : allTurns.filter((t) => t.player === historyFilter).slice(0, 12),
+  )
 
   const ownerLabel = (owner: number, player: number): string =>
     owner === player ? 'their own group' : `${game.players[owner].name}'s group`
@@ -486,9 +497,27 @@
       <p class="status">{status}</p>
       {#if notice}<p class="notice" role="alert">{notice}</p>{/if}
     </div>
-    {#if history.length > 0}
+    {#if allTurns.length > 0}
       <details class="history" open>
         <summary>Recent plays</summary>
+        <div class="filters" role="group" aria-label="Show plays by">
+          <button type="button" class="fchip" aria-pressed={historyFilter === null} onclick={() => (historyFilter = null)}>
+            All
+          </button>
+          {#each game.players as p, i (i)}
+            <button
+              type="button"
+              class="fchip p{i % 3}"
+              aria-pressed={historyFilter === i}
+              onclick={() => (historyFilter = historyFilter === i ? null : i)}
+            >
+              {p.name}
+            </button>
+          {/each}
+        </div>
+        {#if history.length === 0}
+          <p class="none">{game.players[historyFilter ?? 0].name} has not played yet this round.</p>
+        {/if}
         <ol>
           {#each history as t, i (i)}
             {@const name = game.players[t.player].name}
@@ -917,6 +946,31 @@
     font-size: 0.85rem;
     font-weight: 700;
     color: var(--text-dim);
+  }
+  .history .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.4rem;
+  }
+  .history .fchip {
+    min-height: 1.9rem;
+    padding: 0.15rem 0.7rem;
+    border-radius: 999px;
+    border: 2px solid var(--who, rgb(255 255 255 / 0.5));
+    background: transparent;
+    color: var(--text);
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+  .history .fchip[aria-pressed='true'] {
+    background: var(--who, #fff);
+    color: var(--ink);
+  }
+  .history .none {
+    margin: 0.4rem 0 0;
+    color: var(--text-dim);
+    font-size: 0.85rem;
   }
   .history ol {
     list-style: none;
