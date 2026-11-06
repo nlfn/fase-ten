@@ -3,10 +3,9 @@
   import Game from './lib/Game.svelte'
   import Setup from './lib/Setup.svelte'
   import type { GameConfig } from './lib/Setup.svelte'
+  import { pickBotNames } from './lib/botNames'
   import { clearSession, loadSession } from './lib/storage'
   import type { Session } from './lib/storage'
-
-  const BOT_NAMES = ['Robo', 'Chip']
 
   let saved = $state.raw<Session | null>(loadSession())
   let session = $state.raw<Session | null>(null)
@@ -14,7 +13,7 @@
   function start(config: GameConfig) {
     const players = [
       { name: config.name, isBot: false },
-      ...BOT_NAMES.slice(0, config.opponents).map((name) => ({ name, isBot: true })),
+      ...pickBotNames(config.name, config.opponents).map((name) => ({ name, isBot: true })),
     ]
     clearSession()
     session = { state: createGame(players), level: config.level }
