@@ -1,6 +1,7 @@
 <script lang="ts">
   import { PHASES } from '../engine'
   import type { BotLevel, GameMode } from '../engine'
+  import { loadSettings, saveSettings } from './storage'
   import type { Session } from './storage'
 
   export interface GameConfig {
@@ -18,10 +19,12 @@
 
   let { saved, onStart, onContinue }: Props = $props()
 
-  let name = $state('You')
-  let opponents = $state<1 | 2>(1)
-  let level = $state<BotLevel>('normal')
-  let mode = $state<GameMode>('classic')
+  // Start from whatever was used for the last game.
+  const last = loadSettings()
+  let name = $state(last.name ?? 'You')
+  let opponents = $state<1 | 2>(last.opponents ?? 1)
+  let level = $state<BotLevel>(last.level ?? 'normal')
+  let mode = $state<GameMode>(last.mode ?? 'classic')
 
   // The date and time are shown in the viewer's own time zone.
   const buildInfo = `${__BUILD_LABEL__}, built ${new Date(__BUILD_TIME__).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`
@@ -37,7 +40,9 @@
 
   function submit(event: SubmitEvent) {
     event.preventDefault()
-    onStart({ name: name.trim() || 'You', opponents, level, mode })
+    const config: GameConfig = { name: name.trim() || 'You', opponents, level, mode }
+    saveSettings(config)
+    onStart(config)
   }
 </script>
 

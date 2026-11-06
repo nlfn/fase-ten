@@ -26,10 +26,11 @@
 
   interface Props {
     session: Session
-    onExit: () => void
+    onExit: () => void // back to the menu; the game is saved and can be continued
+    onQuit: () => void // abandon the game for good
   }
 
-  let { session, onExit }: Props = $props()
+  let { session, onExit, onQuit }: Props = $props()
 
   // The game state is replaced as a whole after every action, so it stays unproxied.
   // svelte-ignore state_referenced_locally
@@ -49,6 +50,13 @@
   let undoStack = $state.raw<GameState[]>([])
   let showChart = $state(false)
   let showPicker = $state(false)
+  let confirmQuit = $state(false)
+  let keepPlaying = $state<HTMLButtonElement>()
+  $effect(() => {
+    if (confirmQuit) keepPlaying?.focus()
+  })
+  // Lets the player tuck the round summary away to look over the finished table.
+  let resultHidden = $state(false)
 
   const HUMAN = 0
   const yousee = $derived(game.mode === 'yousee')
@@ -261,6 +269,7 @@
   }
 
   function startNextRound() {
+    resultHidden = false
     game = nextRound(game)
     undoStack = []
     selectedIds = []
@@ -348,7 +357,7 @@
   </div>
 {/snippet}
 
-<div class="table">
+<div class="table" class:has-bar={resultHidden && game.status !== 'playing'}>
   <header class="bar">
     <h1>Round {game.round}</h1>
     {#if me.laidDown && me.laidPhase !== null}
@@ -360,6 +369,7 @@
     {/if}
     <button type="button" class="ghost" onclick={() => (showChart = true)}>Phases</button>
     <button type="button" class="ghost" onclick={onExit}>Menu</button>
+    <button type="button" class="ghost" onclick={() => (confirmQuit = true)}>Quit</button>
   </header>
 
   <section class="players" aria-label="Players">
@@ -489,11 +499,47 @@
     />
   {/if}
 
+  {#if confirmQuit}
+    <div class="modal-backdrop" role="presentation" onclick={(e) => e.target === e.currentTarget && (confirmQuit = false)}>
+      <div
+        class="modal"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="quit-title"
+        aria-describedby="quit-text"
+        tabindex="-1"
+        onkeydown={(e) => e.key === 'Escape' && (confirmQuit = false)}
+      >
+        <h2 id="quit-title">Quit this game?</h2>
+        <p id="quit-text">
+          This will abandon the current game. Your scores and progress will be lost and you will not be able to
+          continue it. To pause instead, use Menu.
+        </p>
+        <div class="quit-actions">
+          <button type="button" class="primary" bind:this={keepPlaying} onclick={() => (confirmQuit = false)}>
+            Keep playing
+          </button>
+          <button type="button" class="danger" onclick={onQuit}>Abandon game</button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
   {#if showChart}
     <PhaseChart {game} onClose={() => (showChart = false)} />
   {/if}
 
-  {#if game.status !== 'playing'}
+  {#if game.status !== 'playing' && resultHidden}
+    <div class="result-bar" role="status">
+      <strong>{resultTitle}</strong>
+      <button type="button" class="ghost" onclick={() => (resultHidden = false)}>Show results</button>
+      {#if game.status === 'gameOver'}
+        <button type="button" class="primary" onclick={onExit}>New game</button>
+      {:else}
+        <button type="button" class="primary" onclick={startNextRound}>Next round</button>
+      {/if}
+    </div>
+  {:else if game.status !== 'playing'}
     <div class="overlay">
       <div class="panel" role="dialog" aria-modal="true" aria-labelledby="result-title">
         <h2 id="result-title">{resultTitle}</h2>
@@ -540,11 +586,14 @@
             {/each}
           </tbody>
         </table>
-        {#if game.status === 'gameOver'}
-          <button type="button" class="primary big" bind:this={continueButton} onclick={onExit}>New game</button>
-        {:else}
-          <button type="button" class="primary big" bind:this={continueButton} onclick={startNextRound}>Next round</button>
-        {/if}
+        <div class="result-actions">
+          <button type="button" class="ghost big" onclick={() => (resultHidden = true)}>View table</button>
+          {#if game.status === 'gameOver'}
+            <button type="button" class="primary big" bind:this={continueButton} onclick={onExit}>New game</button>
+          {:else}
+            <button type="button" class="primary big" bind:this={continueButton} onclick={startNextRound}>Next round</button>
+          {/if}
+        </div>
       </div>
     </div>
   {/if}
@@ -897,6 +946,44 @@
     font-size: 0.8rem;
     color: var(--text-dim);
     font-weight: 600;
+  }
+  .quit-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+  }
+  .result-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+  }
+  .result-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    padding: 0.7rem max(0.9rem, env(safe-area-inset-right)) max(0.7rem, env(safe-area-inset-bottom))
+      max(0.9rem, env(safe-area-inset-left));
+    background: var(--felt);
+    box-shadow:
+      0 -2px 0 var(--gold),
+      0 -0.5rem 1.5rem rgb(0 0 0 / 0.4);
+  }
+  .result-bar strong {
+    flex: 1 1 0;
+    min-width: 6rem;
+  }
+  .result-bar button {
+    padding: 0.5rem 0.8rem;
+    font-size: 0.9rem;
+  }
+  .table.has-bar {
+    padding-bottom: 5rem;
   }
   .cards-row td {
     padding-top: 0.2rem;

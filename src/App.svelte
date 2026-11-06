@@ -27,10 +27,17 @@
     session = null
     saved = loadSession()
   }
+
+  /** Throws the game away: nothing is left to continue. */
+  function quit() {
+    session = null
+    clearSession()
+    saved = null
+  }
 </script>
 
 {#if session}
-  <Game {session} onExit={leave} />
+  <Game {session} onExit={leave} onQuit={quit} />
 {:else}
   <Setup {saved} onStart={start} onContinue={resume} />
 {/if}
