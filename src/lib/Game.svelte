@@ -17,10 +17,11 @@
     recentHitIds,
     topDiscard,
   } from '../engine'
-  import type { Action, Card, GameState, HitTarget, Meld, PlayEvent, RunEnd } from '../engine'
+  import type { Action, Card, GameState, HitTarget, Meld, RunEnd } from '../engine'
   import CardView from './CardView.svelte'
   import PhaseChart from './PhaseChart.svelte'
   import Scoreboard from './Scoreboard.svelte'
+  import { groupTurns } from './turns'
   import PhasePicker from './PhasePicker.svelte'
   import type { PhaseOption } from './PhasePicker.svelte'
   import { clearSession, saveSession } from './storage'
@@ -293,30 +294,11 @@
     }
   }
 
-  // Newest first, limited so the list stays short; older plays scroll.
-  const history = $derived(game.events.slice().reverse().slice(0, 16))
+  // One row per turn, newest first. Older turns scroll.
+  const history = $derived(groupTurns(game.events).reverse().slice(0, 14))
 
-  function eventText(e: PlayEvent): string {
-    const who = game.players[e.player].name
-    switch (e.kind) {
-      case 'draw':
-        return `${who} drew from the deck`
-      case 'pickup':
-        return `${who} took the discard`
-      case 'discard':
-        return `${who} discarded`
-      case 'skip':
-        return `${who} played Skip on ${game.players[e.target].name}`
-      case 'skipped':
-        return `${who} lost a turn to a Skip`
-      case 'laydown':
-        return `${who} laid down Phase ${e.phase + 1}`
-      case 'hit':
-        return e.owner === e.player
-          ? `${who} added to their own group`
-          : `${who} added to ${game.players[e.owner].name}'s group`
-    }
-  }
+  const ownerLabel = (owner: number, player: number): string =>
+    owner === player ? 'their own group' : `${game.players[owner].name}'s group`
 
   function phaseLabel(phase: number): string {
     return phase >= PHASE_COUNT ? 'All phases done' : `Phase ${phase + 1}`
@@ -469,11 +451,37 @@
       <details class="history" open>
         <summary>Recent plays</summary>
         <ol>
-          {#each history as e, i (game.events.length - i)}
-            <li class="p{e.player % 3}" class:newturn={i > 0 && history[i - 1].player !== e.player}>
-              <span class="what">{eventText(e)}</span>
-              {#if 'card' in e}<CardView card={e.card} size="chip" />{/if}
-            </li>
+          {#each history as t, i (i)}
+            {@const name = game.players[t.player].name}
+            {#if t.skipped}
+              <li class="p{t.player % 3} lost">
+                <span class="who">{name}</span>
+                <span class="step">lost a turn to a Skip</span>
+              </li>
+            {:else}
+              <li class="p{t.player % 3}">
+                <span class="who">{name}</span>
+                {#each t.steps as step}
+                  <span class="step">
+                    {#if step.kind === 'draw'}
+                      drew
+                    {:else if step.kind === 'pickup'}
+                      took <CardView card={step.card} size="chip" />
+                    {:else if step.kind === 'laydown'}
+                      laid down Phase {step.phase + 1}
+                    {:else if step.kind === 'hit'}
+                      added
+                      {#each step.cards as c (c.id)}<CardView card={c} size="chip" />{/each}
+                      to {ownerLabel(step.owner, t.player)}
+                    {:else if step.kind === 'discard'}
+                      discarded <CardView card={step.card} size="chip" />
+                    {:else}
+                      played Skip on {game.players[step.target].name} <CardView card={step.card} size="chip" />
+                    {/if}
+                  </span>
+                {/each}
+              </li>
+            {/if}
           {/each}
         </ol>
       </details>
@@ -875,24 +883,45 @@
     list-style: none;
     margin: 0.4rem 0 0;
     padding: 0;
-    max-height: 8.5rem;
+    max-height: 10rem;
     overflow-y: auto;
   }
   .history li {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.6rem;
-    padding: 0.2rem 0.4rem 0.2rem 0.5rem;
+    gap: 0.15rem 0.4rem;
+    padding: 0.25rem 0.4rem 0.25rem 0.5rem;
     border-left: 4px solid var(--who, #fff);
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     min-height: 1.9rem;
   }
-  .history li.newturn {
+  .history li + li {
     margin-top: 0.3rem;
   }
-  .history li:first-child .what {
-    font-weight: 700;
+  .history .who {
+    font-weight: 800;
+    color: var(--who, #fff);
+  }
+  .history .step {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.2rem;
+  }
+  /* A small arrow between the parts of a turn: took 10, then discarded 11. */
+  .history .step + .step::before {
+    content: '→';
+    margin-right: 0.2rem;
+    color: var(--text-dim);
+  }
+  .history li.lost {
+    color: var(--text-dim);
+    font-style: italic;
+    opacity: 0.85;
+  }
+  .history li:first-child {
+    background: rgb(255 255 255 / 0.06);
   }
   .p0 {
     --who: #ffd84d;
