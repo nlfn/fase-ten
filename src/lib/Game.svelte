@@ -49,6 +49,8 @@
   let undoStack = $state.raw<GameState[]>([])
   let showChart = $state(false)
   let showPicker = $state(false)
+  // Lets the player tuck the round summary away to look over the finished table.
+  let resultHidden = $state(false)
 
   const HUMAN = 0
   const yousee = $derived(game.mode === 'yousee')
@@ -261,6 +263,7 @@
   }
 
   function startNextRound() {
+    resultHidden = false
     game = nextRound(game)
     undoStack = []
     selectedIds = []
@@ -348,7 +351,7 @@
   </div>
 {/snippet}
 
-<div class="table">
+<div class="table" class:has-bar={resultHidden && game.status !== 'playing'}>
   <header class="bar">
     <h1>Round {game.round}</h1>
     {#if me.laidDown && me.laidPhase !== null}
@@ -493,7 +496,17 @@
     <PhaseChart {game} onClose={() => (showChart = false)} />
   {/if}
 
-  {#if game.status !== 'playing'}
+  {#if game.status !== 'playing' && resultHidden}
+    <div class="result-bar" role="status">
+      <strong>{resultTitle}</strong>
+      <button type="button" class="ghost" onclick={() => (resultHidden = false)}>Show results</button>
+      {#if game.status === 'gameOver'}
+        <button type="button" class="primary" onclick={onExit}>New game</button>
+      {:else}
+        <button type="button" class="primary" onclick={startNextRound}>Next round</button>
+      {/if}
+    </div>
+  {:else if game.status !== 'playing'}
     <div class="overlay">
       <div class="panel" role="dialog" aria-modal="true" aria-labelledby="result-title">
         <h2 id="result-title">{resultTitle}</h2>
@@ -540,11 +553,14 @@
             {/each}
           </tbody>
         </table>
-        {#if game.status === 'gameOver'}
-          <button type="button" class="primary big" bind:this={continueButton} onclick={onExit}>New game</button>
-        {:else}
-          <button type="button" class="primary big" bind:this={continueButton} onclick={startNextRound}>Next round</button>
-        {/if}
+        <div class="result-actions">
+          <button type="button" class="ghost big" onclick={() => (resultHidden = true)}>View table</button>
+          {#if game.status === 'gameOver'}
+            <button type="button" class="primary big" bind:this={continueButton} onclick={onExit}>New game</button>
+          {:else}
+            <button type="button" class="primary big" bind:this={continueButton} onclick={startNextRound}>Next round</button>
+          {/if}
+        </div>
       </div>
     </div>
   {/if}
@@ -897,6 +913,39 @@
     font-size: 0.8rem;
     color: var(--text-dim);
     font-weight: 600;
+  }
+  .result-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+  }
+  .result-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    padding: 0.7rem max(0.9rem, env(safe-area-inset-right)) max(0.7rem, env(safe-area-inset-bottom))
+      max(0.9rem, env(safe-area-inset-left));
+    background: var(--felt);
+    box-shadow:
+      0 -2px 0 var(--gold),
+      0 -0.5rem 1.5rem rgb(0 0 0 / 0.4);
+  }
+  .result-bar strong {
+    flex: 1 1 0;
+    min-width: 6rem;
+  }
+  .result-bar button {
+    padding: 0.5rem 0.8rem;
+    font-size: 0.9rem;
+  }
+  .table.has-bar {
+    padding-bottom: 5rem;
   }
   .cards-row td {
     padding-top: 0.2rem;
