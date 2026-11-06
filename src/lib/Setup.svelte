@@ -1,0 +1,271 @@
+<script lang="ts">
+  import { PHASES } from '../engine'
+  import type { BotLevel } from '../engine'
+  import type { Session } from './storage'
+
+  export interface GameConfig {
+    name: string
+    opponents: 1 | 2
+    level: BotLevel
+  }
+
+  interface Props {
+    saved: Session | null
+    onStart: (config: GameConfig) => void
+    onContinue: () => void
+  }
+
+  let { saved, onStart, onContinue }: Props = $props()
+
+  let name = $state('You')
+  let opponents = $state<1 | 2>(1)
+  let level = $state<BotLevel>('normal')
+
+  const savedSummary = $derived(
+    saved
+      ? `Round ${saved.state.round}, you are on Phase ${saved.state.players[0].phase + 1}`
+      : '',
+  )
+
+  function submit(event: SubmitEvent) {
+    event.preventDefault()
+    onStart({ name: name.trim() || 'You', opponents, level })
+  }
+</script>
+
+<main class="setup">
+  <header>
+    <h1>Fase Ten</h1>
+    <p class="lead">Ten-phase rummy against the computer. Finish all ten phases before they do.</p>
+  </header>
+
+  {#if saved}
+    <section class="resume" aria-label="Saved game">
+      <div>
+        <strong>Game in progress</strong>
+        <span>{savedSummary}</span>
+      </div>
+      <button type="button" class="primary" onclick={onContinue}>Continue</button>
+    </section>
+  {/if}
+
+  <form onsubmit={submit}>
+    <label class="field">
+      <span>Your name</span>
+      <input type="text" bind:value={name} maxlength="16" autocomplete="off" />
+    </label>
+
+    <fieldset>
+      <legend>Computer players</legend>
+      <div class="segment">
+        <label><input type="radio" name="opponents" value={1} bind:group={opponents} /><span>1 player</span></label>
+        <label><input type="radio" name="opponents" value={2} bind:group={opponents} /><span>2 players</span></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Difficulty</legend>
+      <div class="segment">
+        <label><input type="radio" name="level" value="easy" bind:group={level} /><span>Easy</span></label>
+        <label><input type="radio" name="level" value="normal" bind:group={level} /><span>Normal</span></label>
+      </div>
+      <p class="hint">
+        {level === 'easy'
+          ? 'Easy players miss good cards and sometimes throw away ones they need.'
+          : 'Normal players grab useful discards, lay down quickly, and hit every card they can.'}
+      </p>
+    </fieldset>
+
+    <button type="submit" class="primary big">Start game</button>
+  </form>
+
+  <details class="rules">
+    <summary>How to play</summary>
+    <div class="rules-body">
+      <p>
+        Each round, collect the cards for your current phase. Every turn you draw a card (from the deck or the
+        top of the discard pile), then discard one. Once you have the right cards, lay down your phase. After that
+        you can add cards to any group on the table, called hitting. Go out first to end the round.
+      </p>
+      <ul>
+        <li><strong>Set:</strong> cards with the same number.</li>
+        <li><strong>Run:</strong> cards in number order, any colors. No wrapping from 12 to 1.</li>
+        <li><strong>Wild:</strong> stands in for any card. Every group needs at least one regular card.</li>
+        <li><strong>Skip:</strong> can't be used in a group. Discard it to make another player lose a turn.</li>
+        <li><strong>Points left in hand:</strong> 1 to 9 are 5 each, 10 to 12 are 10 each, Skip is 15, Wild is 25.</li>
+        <li>You only move to the next phase if you laid yours down. The lowest score wins ties.</li>
+      </ul>
+      <ol class="phases">
+        {#each PHASES as phase (phase.number)}
+          <li>{phase.description}</li>
+        {/each}
+      </ol>
+    </div>
+  </details>
+
+  <footer>Unofficial fan project. Phase 10 is a trademark of Mattel.</footer>
+</main>
+
+<style>
+  .setup {
+    max-width: 30rem;
+    margin: 0 auto;
+    padding: max(1.5rem, env(safe-area-inset-top)) 1.25rem 2rem;
+    display: grid;
+    gap: 1.5rem;
+  }
+  h1 {
+    margin: 0;
+    font-size: clamp(3rem, 14vw, 4.5rem);
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    line-height: 0.95;
+  }
+  .lead {
+    margin: 0.75rem 0 0;
+    color: var(--text-dim);
+    max-width: 26ch;
+    font-size: 1.1rem;
+    line-height: 1.4;
+  }
+
+  .resume {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem 1rem;
+    border-radius: 0.9rem;
+    background: var(--felt-light);
+    box-shadow: 0 0 0 2px var(--gold);
+  }
+  .resume div {
+    display: grid;
+  }
+  .resume span {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+  }
+
+  form {
+    display: grid;
+    gap: 1.25rem;
+  }
+  .field {
+    display: grid;
+    gap: 0.4rem;
+    font-weight: 600;
+  }
+  input[type='text'] {
+    font: inherit;
+    padding: 0.75rem 0.9rem;
+    border-radius: 0.7rem;
+    border: 2px solid transparent;
+    background: var(--felt-deep);
+    color: var(--text);
+  }
+  input[type='text']:focus-visible {
+    outline: none;
+    border-color: var(--gold);
+  }
+  fieldset {
+    border: 0;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0.5rem;
+  }
+  legend {
+    padding: 0;
+    margin-bottom: 0.4rem;
+    font-weight: 600;
+  }
+  .segment {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+  .segment label {
+    position: relative;
+  }
+  .segment input {
+    position: absolute;
+    opacity: 0;
+    inset: 0;
+    cursor: pointer;
+  }
+  .segment span {
+    display: block;
+    padding: 0.8rem;
+    text-align: center;
+    font-weight: 700;
+    border-radius: 0.7rem;
+    background: var(--felt-deep);
+    border: 2px solid transparent;
+  }
+  .segment input:checked + span {
+    background: var(--gold);
+    color: var(--ink);
+  }
+  .segment input:focus-visible + span {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+  }
+  .hint {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    min-height: 2.6em;
+  }
+  .big {
+    padding: 1rem;
+    font-size: 1.15rem;
+  }
+
+  .rules {
+    border-top: 1px solid rgb(255 255 255 / 0.15);
+    padding-top: 1rem;
+  }
+  summary {
+    cursor: pointer;
+    font-weight: 700;
+  }
+  summary:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 3px;
+  }
+  .rules-body {
+    display: grid;
+    gap: 0.8rem;
+    margin-top: 0.8rem;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+  .rules-body p,
+  .rules-body ul,
+  .rules-body ol {
+    margin: 0;
+  }
+  .rules-body ul {
+    padding-left: 1.1rem;
+    display: grid;
+    gap: 0.35rem;
+  }
+  .rules-body strong {
+    color: var(--text);
+  }
+  .phases {
+    padding-left: 1.6rem;
+    columns: 2;
+    column-gap: 1.5rem;
+  }
+  .phases li {
+    break-inside: avoid;
+    padding: 0.1rem 0;
+  }
+
+  footer {
+    color: var(--text-dim);
+    font-size: 0.8rem;
+  }
+</style>
