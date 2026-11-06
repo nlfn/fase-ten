@@ -26,10 +26,11 @@
 
   interface Props {
     session: Session
-    onExit: () => void
+    onExit: () => void // back to the menu; the game is saved and can be continued
+    onQuit: () => void // abandon the game for good
   }
 
-  let { session, onExit }: Props = $props()
+  let { session, onExit, onQuit }: Props = $props()
 
   // The game state is replaced as a whole after every action, so it stays unproxied.
   // svelte-ignore state_referenced_locally
@@ -49,6 +50,11 @@
   let undoStack = $state.raw<GameState[]>([])
   let showChart = $state(false)
   let showPicker = $state(false)
+  let confirmQuit = $state(false)
+  let keepPlaying = $state<HTMLButtonElement>()
+  $effect(() => {
+    if (confirmQuit) keepPlaying?.focus()
+  })
   // Lets the player tuck the round summary away to look over the finished table.
   let resultHidden = $state(false)
 
@@ -363,6 +369,7 @@
     {/if}
     <button type="button" class="ghost" onclick={() => (showChart = true)}>Phases</button>
     <button type="button" class="ghost" onclick={onExit}>Menu</button>
+    <button type="button" class="ghost" onclick={() => (confirmQuit = true)}>Quit</button>
   </header>
 
   <section class="players" aria-label="Players">
@@ -490,6 +497,32 @@
       onPick={pickPhase}
       onClose={() => (showPicker = false)}
     />
+  {/if}
+
+  {#if confirmQuit}
+    <div class="modal-backdrop" role="presentation" onclick={(e) => e.target === e.currentTarget && (confirmQuit = false)}>
+      <div
+        class="modal"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="quit-title"
+        aria-describedby="quit-text"
+        tabindex="-1"
+        onkeydown={(e) => e.key === 'Escape' && (confirmQuit = false)}
+      >
+        <h2 id="quit-title">Quit this game?</h2>
+        <p id="quit-text">
+          This will abandon the current game. Your scores and progress will be lost and you will not be able to
+          continue it. To pause instead, use Menu.
+        </p>
+        <div class="quit-actions">
+          <button type="button" class="primary" bind:this={keepPlaying} onclick={() => (confirmQuit = false)}>
+            Keep playing
+          </button>
+          <button type="button" class="danger" onclick={onQuit}>Abandon game</button>
+        </div>
+      </div>
+    </div>
   {/if}
 
   {#if showChart}
@@ -913,6 +946,11 @@
     font-size: 0.8rem;
     color: var(--text-dim);
     font-weight: 600;
+  }
+  .quit-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
   }
   .result-actions {
     display: grid;
