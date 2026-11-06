@@ -39,6 +39,16 @@ export interface HitMark {
   turn: number
 }
 
+/** One thing that happened, kept so the table can show a readable history of plays. */
+export type PlayEvent =
+  | { player: number; kind: 'draw' } // drew from the deck (the card stays private)
+  | { player: number; kind: 'pickup'; card: Card } // took the top discard
+  | { player: number; kind: 'discard'; card: Card }
+  | { player: number; kind: 'skip'; card: Card; target: number } // played a Skip on someone
+  | { player: number; kind: 'skipped' } // lost their turn to a Skip
+  | { player: number; kind: 'laydown'; phase: number }
+  | { player: number; kind: 'hit'; card: Card; owner: number } // added to a group on the table
+
 export interface GameState {
   players: Player[]
   drawPile: Card[] // last element is the top
@@ -55,6 +65,7 @@ export interface GameState {
   log: string[]
   turnCount: number // counts every seat the turn passes to, including skipped seats
   hits: HitMark[] // recent additions to groups, used to highlight them
+  events: PlayEvent[] // recent plays this round, oldest first
 }
 
 export type Action =
@@ -72,6 +83,12 @@ export interface PlayerSetup {
 }
 
 const MAX_LOG = 80
+const MAX_EVENTS = 40
+
+function addEvent(state: GameState, event: PlayEvent): void {
+  state.events.push(event)
+  if (state.events.length > MAX_EVENTS) state.events.splice(0, state.events.length - MAX_EVENTS)
+}
 
 function addLog(state: GameState, message: string): void {
   state.log.push(message)
@@ -113,6 +130,7 @@ export function createGame(setups: readonly PlayerSetup[], seed: number = random
     log: [],
     turnCount: 0,
     hits: [],
+    events: [],
   }
   dealRound(state)
   return state
@@ -142,6 +160,7 @@ function dealRound(state: GameState): void {
   state.drawPile = deck
   state.melds = []
   state.hits = []
+  state.events = []
   state.roundResult = null
   state.status = 'playing'
 
@@ -159,6 +178,7 @@ function beginTurn(state: GameState, index: number): void {
   for (let guard = 0; guard < n && state.players[i].skipped; guard++) {
     state.players[i].skipped = false
     addLog(state, `${state.players[i].name} is skipped`)
+    addEvent(state, { player: i, kind: 'skipped' })
     i = (i + 1) % n
     state.turnCount += 1 // a skipped seat still counts, so one lap is always one full round
   }
@@ -220,6 +240,7 @@ export function applyAction(state: GameState, action: Action): ActionResult {
       player.hand.push(s.drawPile.pop() as Card)
       s.stage = 'play'
       addLog(s, `${player.name} drew from the deck`)
+      addEvent(s, { player: s.current, kind: 'draw' })
       return succeed(s)
     }
 
@@ -232,6 +253,7 @@ export function applyAction(state: GameState, action: Action): ActionResult {
       player.hand.push(top)
       s.stage = 'play'
       addLog(s, `${player.name} picked up ${cardLabel(top)}`)
+      addEvent(s, { player: s.current, kind: 'pickup', card: top })
       return succeed(s)
     }
 
@@ -261,6 +283,7 @@ export function applyAction(state: GameState, action: Action): ActionResult {
       }
       player.laidDown = true
       addLog(s, `${player.name} laid down Phase ${player.phase + 1}`)
+      addEvent(s, { player: s.current, kind: 'laydown', phase: player.phase })
       if (player.hand.length === 0) endRound(s, s.current)
       return succeed(s)
     }
@@ -278,6 +301,7 @@ export function applyAction(state: GameState, action: Action): ActionResult {
       s.hits = s.hits.filter((h) => s.turnCount - h.turn < n)
       const whose = meld.owner === s.current ? 'their own group' : `${s.players[meld.owner].name}'s group`
       addLog(s, `${player.name} hit ${whose} with ${cardLabel(card)}`)
+      addEvent(s, { player: s.current, kind: 'hit', card, owner: meld.owner })
       if (player.hand.length === 0) endRound(s, s.current)
       return succeed(s)
     }
@@ -306,8 +330,10 @@ export function applyAction(state: GameState, action: Action): ActionResult {
       if (target !== null) {
         s.players[target].skipped = true
         addLog(s, `${player.name} played Skip on ${s.players[target].name}`)
+        addEvent(s, { player: s.current, kind: 'skip', card, target })
       } else {
         addLog(s, `${player.name} discarded ${cardLabel(card)}`)
+        addEvent(s, { player: s.current, kind: 'discard', card })
       }
 
       if (player.hand.length === 0) {

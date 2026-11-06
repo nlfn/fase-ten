@@ -15,7 +15,7 @@
     recentHitIds,
     topDiscard,
   } from '../engine'
-  import type { Action, Card, GameState, HitTarget, Meld, RunEnd } from '../engine'
+  import type { Action, Card, GameState, HitTarget, Meld, PlayEvent, RunEnd } from '../engine'
   import CardView from './CardView.svelte'
   import { clearSession, saveSession } from './storage'
   import type { Session } from './storage'
@@ -231,6 +231,31 @@
     }
   }
 
+  // Newest first, limited so the list stays short; older plays scroll.
+  const history = $derived(game.events.slice().reverse().slice(0, 16))
+
+  function eventText(e: PlayEvent): string {
+    const who = game.players[e.player].name
+    switch (e.kind) {
+      case 'draw':
+        return `${who} drew from the deck`
+      case 'pickup':
+        return `${who} took the discard`
+      case 'discard':
+        return `${who} discarded`
+      case 'skip':
+        return `${who} played Skip on ${game.players[e.target].name}`
+      case 'skipped':
+        return `${who} lost a turn to a Skip`
+      case 'laydown':
+        return `${who} laid down Phase ${e.phase + 1}`
+      case 'hit':
+        return e.owner === e.player
+          ? `${who} added to their own group`
+          : `${who} added to ${game.players[e.owner].name}'s group`
+    }
+  }
+
   function phaseLabel(phase: number): string {
     return phase >= PHASE_COUNT ? 'All phases done' : `Phase ${phase + 1}`
   }
@@ -348,8 +373,20 @@
     <div class="talk" aria-live="polite">
       <p class="status">{status}</p>
       {#if notice}<p class="notice" role="alert">{notice}</p>{/if}
-      <p class="log">{game.log.slice(-3).join('. ')}</p>
     </div>
+    {#if history.length > 0}
+      <details class="history" open>
+        <summary>Recent plays</summary>
+        <ol>
+          {#each history as e, i (game.events.length - i)}
+            <li class="p{e.player % 3}" class:newturn={i > 0 && history[i - 1].player !== e.player}>
+              <span class="what">{eventText(e)}</span>
+              {#if 'card' in e}<CardView card={e.card} size="chip" />{/if}
+            </li>
+          {/each}
+        </ol>
+      </details>
+    {/if}
   </section>
 
   <section class="hand-area" aria-label="Your hand">
@@ -654,9 +691,49 @@
     color: #ffb3aa;
     font-weight: 600;
   }
-  .log {
-    color: var(--text-dim);
+  .history {
+    flex: 1 1 100%;
+    border-radius: 0.7rem;
+    background: var(--felt-deep);
+    padding: 0.45rem 0.7rem;
+  }
+  .history summary {
+    cursor: pointer;
     font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-dim);
+  }
+  .history ol {
+    list-style: none;
+    margin: 0.4rem 0 0;
+    padding: 0;
+    max-height: 8.5rem;
+    overflow-y: auto;
+  }
+  .history li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    padding: 0.2rem 0.4rem 0.2rem 0.5rem;
+    border-left: 4px solid var(--who, #fff);
+    font-size: 0.85rem;
+    min-height: 1.9rem;
+  }
+  .history li.newturn {
+    margin-top: 0.3rem;
+  }
+  .history li:first-child .what {
+    font-weight: 700;
+  }
+  .p0 {
+    --who: #ffd84d;
+  }
+  .p1 {
+    --who: #6ee7f9;
+  }
+  .p2 {
+    --who: #ff9ec7;
   }
 
   .hand-area {

@@ -249,6 +249,48 @@ describe('hitting', () => {
   })
 })
 
+describe('play history', () => {
+  it('records draws, pickups and discards with the cards that are public', () => {
+    let s = craftedGame(nums(1, 2, 3))
+    s.stage = 'draw'
+    const top = topDiscard(s)!
+    if (top.kind === 'skip') s.discardPile.push(num(4, 'blue'))
+    const shown = topDiscard(s)!
+    s = run(s, { type: 'drawDiscard' })
+    s = run(s, { type: 'discard', cardId: s.players[0].hand[0].id })
+    s = run(s, { type: 'drawDeck' })
+    expect(s.events.map((e) => e.kind)).toEqual(['pickup', 'discard', 'draw'])
+    expect(s.events[0]).toMatchObject({ player: 0, card: { id: shown.id } })
+    expect('card' in s.events[2]).toBe(false) // a deck draw does not reveal the card
+    expect(s.events[2].player).toBe(1)
+  })
+
+  it('records a Skip and the player who loses the turn', () => {
+    const sk = skip()
+    let s = craftedGame([sk, ...nums(1, 2, 3)], { setups: THREE_PLAYERS })
+    s = run(s, { type: 'discard', cardId: sk.id, skipTarget: 1 })
+    expect(s.events.at(-2)).toMatchObject({ kind: 'skip', player: 0, target: 1 })
+    expect(s.events.at(-1)).toMatchObject({ kind: 'skipped', player: 1 })
+  })
+
+  it('records laying down and hitting', () => {
+    const hand = [...nums(5, 5, 5, 9, 9, 9), num(9, 'blue'), num(1), num(2)]
+    let s = craftedGame(hand)
+    s = run(s, { type: 'layDown', groups: [ids(hand.slice(0, 3)), ids(hand.slice(3, 6))] })
+    const nineSet = s.melds.find((m) => m.kind === 'set' && m.value === 9)!
+    s = run(s, { type: 'hit', cardId: hand[6].id, meldId: nineSet.id })
+    expect(s.events.map((e) => e.kind)).toEqual(['laydown', 'hit'])
+  })
+
+  it('is cleared when a new round starts', () => {
+    let s = craftedGame(nums(1, 2, 3))
+    s = run(s, { type: 'discard', cardId: s.players[0].hand[0].id })
+    s.status = 'roundOver'
+    // Nothing from the old round remains; a new round can only start with a lost turn.
+    expect(nextRound(s).events.every((e) => e.kind === 'skipped')).toBe(true)
+  })
+})
+
 describe('recent hits', () => {
   function afterHit(setups = TWO_PLAYERS) {
     const hand = [...nums(5, 5, 5, 9, 9, 9), num(9, 'blue'), num(1), num(2)]

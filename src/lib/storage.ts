@@ -28,6 +28,7 @@ export function loadSession(): Session | null {
     // Games saved by an earlier version have no hit history yet.
     state.turnCount ??= 0
     state.hits ??= []
+    state.events ??= []
     return { state, level: parsed.level }
   } catch {
     return null

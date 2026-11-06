@@ -4,7 +4,7 @@
 
   interface Props {
     card: Card
-    size?: 'md' | 'xs'
+    size?: 'md' | 'xs' | 'chip'
     selected?: boolean
     glow?: boolean // marks a card that can be taken right now
     marked?: boolean // marks a card that was added to a group recently
@@ -93,6 +93,13 @@
   }
   .card.xs {
     --cw: clamp(30px, 8vw, 38px);
+  }
+  /* A small inline label for lists, wide rather than tall. */
+  .card.chip {
+    --cw: 2.3rem;
+    aspect-ratio: 1.25 / 1;
+    font-size: 1rem;
+    border-radius: 0.3rem;
   }
   button.card {
     cursor: pointer;
@@ -205,10 +212,14 @@
 
   .xs .tag,
   .xs .corner,
-  .xs .shape {
+  .xs .shape,
+  .chip .tag,
+  .chip .corner,
+  .chip .shape {
     display: none;
   }
-  .xs .num {
+  .xs .num,
+  .chip .num {
     transform: none;
   }
 
