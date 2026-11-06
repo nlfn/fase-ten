@@ -177,6 +177,15 @@
   }
 
   function toggle(id: number) {
+    const card = me.hand.find((c) => c.id === id)
+    const holdingSkip = selectedCards.some((c) => c.kind === 'skip')
+    if (card && !selectedIds.includes(id) && (card.kind === 'skip' || holdingSkip)) {
+      // A Skip is only ever played on a player, never in a group, so it is selected on its own.
+      selectedIds = [id]
+      autoSelected = false
+      notice = ''
+      return
+    }
     if (autoSelected) {
       // The first tap after drawing starts a new selection (or clears the automatic one).
       selectedIds = selectedIds.includes(id) ? [] : [id]
@@ -202,6 +211,36 @@
       status: me.done[index] ? 'done' : layoutFor(index) ? 'ready' : 'notyet',
     }))
   })
+
+  // The best-play helper never makes mistakes, whatever the opponents' level is.
+  const autoPlayer = createBot('normal')
+
+  /**
+   * Lays down the groups and, when the player did not pick the cards themselves, also adds every
+   * card that fits onto the table, the same way the computer players do. One undo covers it all.
+   */
+  function layDownAndHit(action: Action & { type: 'layDown' }, addExtras: boolean) {
+    const first = applyAction(game, action)
+    if (!first.ok) {
+      notice = first.error
+      return
+    }
+    let state = first.state
+    if (addExtras) {
+      while (state.status === 'playing' && state.stage === 'play') {
+        const next = autoPlayer.chooseAction(state)
+        if (next.type !== 'hit') break
+        const result = applyAction(state, next)
+        if (!result.ok) break
+        state = result.state
+      }
+    }
+    undoStack = state.status === 'playing' ? [...undoStack, game] : []
+    game = state
+    notice = ''
+    selectedIds = []
+    autoSelected = false
+  }
 
   function layDown() {
     if (selectedCards.length > 1 && selectedCards.some((c) => c.kind === 'skip')) {
@@ -239,14 +278,14 @@
         return
       }
     }
-    dispatch({ type: 'layDown', groups: groups.map((g) => g.map((c) => c.id)) })
+    layDownAndHit({ type: 'layDown', groups: groups.map((g) => g.map((c) => c.id)) }, selectedCards.length <= 1)
   }
 
   function pickPhase(phase: number) {
     const groups = layoutFor(phase)
     showPicker = false
     if (!groups) return
-    dispatch({ type: 'layDown', groups: groups.map((g) => g.map((c) => c.id)), phase })
+    layDownAndHit({ type: 'layDown', groups: groups.map((g) => g.map((c) => c.id)), phase }, selectedCards.length <= 1)
   }
 
   function undo() {
