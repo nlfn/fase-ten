@@ -53,6 +53,10 @@ Choices where the official rules are loose or where I picked a house rule:
 - When a run has spare Wilds, they extend it upward first (downward if it already tops out at 12). A Wild added later by hitting lets the player choose which end.
 - The first player rotates each round.
 
+### Fase Ten YouSee
+
+An alternate mode chosen on the welcome screen, played like Yahtzee. Nothing locks you to the next phase. When you lay down, you pick any of the ten phases you have not completed, and that choice is final once the cards are down. A phase counts as completed when the round ends, and only for players who laid down. The game ends the same way as classic: the first players to complete all ten phases, lowest score wins. The computer players take the biggest phase their hand can make. The **Phases** button opens a chart of what each player has completed. In the engine this is `mode: 'yousee'` on the game state, with `done` and `laidPhase` on each player and a `phase` field on the `layDown` action.
+
 ## Computer players
 
 Both levels follow the same plan: take a discard only if it brings the hand closer to the phase, lay down as soon as possible, hit every card they can (natural cards first, Wilds last), dump Skips on the most dangerous opponent, and discard the highest-point card that does not hurt the phase. The easy level makes deliberate mistakes about a third of the time.

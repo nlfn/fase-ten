@@ -40,6 +40,11 @@ export const PHASES: readonly PhaseDef[] = [
 
 export const PHASE_COUNT = PHASES.length
 
+/** How many cards the phase asks for in total. */
+export function phaseSize(phaseIdx: number): number {
+  return (PHASES[phaseIdx]?.groups ?? []).reduce((sum, g) => sum + g.size, 0)
+}
+
 export function phaseDescription(phaseIdx: number): string {
   return PHASES[phaseIdx]?.description ?? ''
 }
