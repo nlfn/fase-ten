@@ -28,7 +28,7 @@ export interface Player {
   done: boolean[] // which of the ten phases this player has completed
   laidPhase: number | null // the phase laid down this round (counts as done when the round ends)
   laidDown: boolean // has laid down this round
-  skipped: boolean // loses their next turn
+  skipsPending: number // how many of their upcoming turns they will lose; each Skip played on them adds one
   score: number // lower is better
 }
 
@@ -129,7 +129,7 @@ export function createGame(
       done: Array.from({ length: PHASE_COUNT }, () => false),
       laidPhase: null,
       laidDown: false,
-      skipped: false,
+      skipsPending: 0,
       score: 0,
     })),
     drawPile: [],
@@ -170,7 +170,7 @@ function dealRound(state: GameState): void {
     p.hand = deck.splice(0, HAND_SIZE)
     p.laidDown = false
     p.laidPhase = null
-    p.skipped = false
+    p.skipsPending = 0
   }
   const starter = deck.pop() as Card
   state.discardPile = [starter]
@@ -183,7 +183,7 @@ function dealRound(state: GameState): void {
 
   addLog(state, `Round ${state.round} begins`)
   const first = (state.round - 1) % state.players.length
-  if (starter.kind === 'skip') state.players[first].skipped = true
+  if (starter.kind === 'skip') state.players[first].skipsPending = 1
   beginTurn(state, first)
 }
 
@@ -192,8 +192,8 @@ function beginTurn(state: GameState, index: number): void {
   const n = state.players.length
   let i = index
   state.turnCount += 1
-  for (let guard = 0; guard < n && state.players[i].skipped; guard++) {
-    state.players[i].skipped = false
+  for (let guard = 0; guard < n && state.players[i].skipsPending > 0; guard++) {
+    state.players[i].skipsPending -= 1
     addLog(state, `${state.players[i].name} is skipped`)
     addEvent(state, { player: i, kind: 'skipped' })
     i = (i + 1) % n
@@ -359,7 +359,7 @@ export function applyAction(state: GameState, action: Action): ActionResult {
       player.hand.splice(idx, 1)
       s.discardPile.push(card)
       if (target !== null) {
-        s.players[target].skipped = true
+        s.players[target].skipsPending += 1
         addLog(s, `${player.name} played Skip on ${s.players[target].name}`)
         addEvent(s, { player: s.current, kind: 'skip', card, target })
       } else {
@@ -386,6 +386,10 @@ export function upgradeSavedState(state: GameState): GameState {
   for (const p of state.players) {
     p.done ??= Array.from({ length: PHASE_COUNT }, (_, i) => i < p.phase)
     p.laidPhase ??= p.laidDown ? Math.min(p.phase, PHASE_COUNT - 1) : null
+    // Older saves kept a yes/no flag called `skipped`.
+    const legacy = p as unknown as { skipped?: boolean }
+    p.skipsPending ??= legacy.skipped ? 1 : 0
+    delete legacy.skipped
   }
   return state
 }

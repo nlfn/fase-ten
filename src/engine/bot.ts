@@ -124,7 +124,7 @@ export function createBot(level: BotLevel = 'normal', random: () => number = Mat
     state.players.forEach((p, i) => {
       if (i === state.current) return
       const score =
-        (p.laidDown ? 50 : 0) + p.phase * 3 + (11 - p.hand.length) - (p.skipped ? 100 : 0)
+        (p.laidDown ? 50 : 0) + p.phase * 3 + (11 - p.hand.length) - (p.skipsPending > 0 ? 100 : 0)
       if (score > bestScore) {
         bestScore = score
         best = i

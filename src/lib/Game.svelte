@@ -382,7 +382,9 @@
         <div class="phead">
           <span class="pname">{p.name}</span>
           {#if p.laidDown}<span class="badge ok">Laid down</span>{/if}
-          {#if p.skipped}<span class="badge warn">Loses a turn</span>{/if}
+          {#if p.skipsPending > 0}
+            <span class="badge warn">{p.skipsPending > 1 ? `Loses ${p.skipsPending} turns` : 'Loses a turn'}</span>
+          {/if}
         </div>
         <div class="pstats">
           <span>{progress(p)}</span>
