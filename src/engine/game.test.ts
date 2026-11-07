@@ -5,6 +5,7 @@ import {
   applyAction,
   canPickUpDiscard,
   createGame,
+  discardLastCard,
   hitTargets,
   nextRound,
   recentHitIds,
@@ -291,6 +292,53 @@ describe('Random mode', () => {
     delete old.drew
     const up = upgradeSavedState(old as unknown as GameState)
     expect(up.drew).toEqual([true, true])
+  })
+
+  describe('discardLastCard', () => {
+    const laidDown = (hand: Card[], setups = TWO_PLAYERS) => {
+      const s = craftedGame(hand, { setups })
+      s.players[0].laidDown = true
+      s.players[0].laidPhase = 0
+      s.melds.push({ id: 90, owner: 0, kind: 'run', start: 5, end: 8, cards: nums(5, 6, 7, 8) })
+      return s
+    }
+
+    it('ends the round when a hit leaves a single card to throw', () => {
+      const hand = nums(4, 12)
+      let s = laidDown(hand)
+      s = run(s, { type: 'hit', cardId: hand[0].id, meldId: 90, end: 'low' })
+      expect(s.status).toBe('playing')
+      expect(s.players[0].hand).toHaveLength(1)
+      s = discardLastCard(s, 0)
+      expect(s.status).toBe('roundOver')
+      expect(s.roundResult?.winner).toBe(0)
+      expect(s.scoreHistory[0].winner).toBe(0)
+    })
+
+    it('can throw a last Skip even with several opponents', () => {
+      const hand = [...nums(4), skip()]
+      let s = laidDown(hand, THREE_PLAYERS)
+      s = run(s, { type: 'hit', cardId: hand[0].id, meldId: 90, end: 'low' })
+      s = discardLastCard(s, 0)
+      expect(s.status).toBe('roundOver')
+      expect(s.roundResult?.winner).toBe(0)
+    })
+
+    it('does nothing with two or more cards, before laying down, out of turn, or before drawing', () => {
+      const two = laidDown(nums(4, 12))
+      expect(discardLastCard(two, 0)).toBe(two)
+
+      const notLaid = craftedGame(nums(12))
+      expect(discardLastCard(notLaid, 0)).toBe(notLaid)
+
+      const other = laidDown(nums(12))
+      other.current = 1
+      expect(discardLastCard(other, 0)).toBe(other)
+
+      const drawing = laidDown(nums(12))
+      drawing.stage = 'draw'
+      expect(discardLastCard(drawing, 0)).toBe(drawing)
+    })
   })
 
   it('upgrades an older save by giving it the plain order', () => {
