@@ -9,6 +9,7 @@
     cardPoints,
     createBot,
     currentPlayer,
+    discardLastCard,
     findPhaseLayout,
     hitTargets,
     meldsOf,
@@ -165,11 +166,12 @@
   }
 
   function dispatch(action: Action): boolean {
-    const result = applyAction(game, action)
-    if (!result.ok) {
-      notice = result.error
+    const first = applyAction(game, action)
+    if (!first.ok) {
+      notice = first.error
       return false
     }
+    const result = { ...first, state: action.type === 'hit' ? discardLastCard(first.state, HUMAN) : first.state }
     // After a draw, the new card is selected for you so you can discard or hit with it right away.
     let next: number[] = []
     if (action.type === 'drawDeck' || action.type === 'drawDiscard') {
@@ -254,6 +256,7 @@
         state = result.state
       }
     }
+    state = discardLastCard(state, HUMAN)
     undoStack = state.status === 'playing' ? [...undoStack, game] : []
     game = state
     notice = ''

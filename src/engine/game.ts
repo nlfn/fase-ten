@@ -430,6 +430,26 @@ export function applyAction(state: GameState, action: Action): ActionResult {
   }
 }
 
+/**
+ * Once a player has laid down and played down to a single card, that card can only be discarded, and
+ * discarding it ends the round. This does that discard for them. It changes nothing in any other
+ * situation, so it is safe to call after any of the player's plays.
+ */
+export function discardLastCard(state: GameState, who: number): GameState {
+  const player = state.players[who]
+  if (state.status !== 'playing' || state.stage !== 'play' || state.current !== who) return state
+  if (!player || !player.laidDown || player.hand.length !== 1) return state
+  const card = player.hand[0]
+  // A Skip needs a target even though the round is about to end; any other player will do.
+  const target = state.players.findIndex((_, i) => i !== who)
+  const result = applyAction(state, {
+    type: 'discard',
+    cardId: card.id,
+    skipTarget: card.kind === 'skip' ? target : undefined,
+  })
+  return result.ok ? result.state : state
+}
+
 /** Fills in fields that games saved by earlier versions do not have. */
 export function upgradeSavedState(state: GameState): GameState {
   state.turnCount ??= 0
