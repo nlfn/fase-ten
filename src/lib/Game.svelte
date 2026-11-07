@@ -219,7 +219,7 @@
   })
 
   // The best-play helper never makes mistakes, whatever the opponents' level is.
-  const autoPlayer = createBot('normal')
+  const autoPlayer = createBot('expert')
 
   /**
    * Lays down the groups and, when the player did not pick the cards themselves, also adds every
@@ -507,7 +507,7 @@
           {#each game.players as p, i (i)}
             <button
               type="button"
-              class="fchip p{i % 3}"
+              class="fchip p{i % 4}"
               aria-pressed={historyFilter === i}
               onclick={() => (historyFilter = historyFilter === i ? null : i)}
             >
@@ -522,12 +522,12 @@
           {#each history as t, i (i)}
             {@const name = game.players[t.player].name}
             {#if t.skipped}
-              <li class="p{t.player % 3} lost">
+              <li class="p{t.player % 4} lost">
                 <span class="who">{name}</span>
                 <span class="step">lost a turn to a Skip</span>
               </li>
             {:else}
-              <li class="p{t.player % 3}">
+              <li class="p{t.player % 4}">
                 <span class="who">{name}</span>
                 {#each t.steps as step}
                   <span class="step">
@@ -1024,6 +1024,9 @@
   }
   .p2 {
     --who: #ff9ec7;
+  }
+  .p3 {
+    --who: #b9f27c;
   }
 
   .hand-area {

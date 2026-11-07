@@ -6,7 +6,7 @@
 
   export interface GameConfig {
     name: string
-    opponents: 1 | 2
+    opponents: 1 | 2 | 3
     level: BotLevel
     mode: GameMode
   }
@@ -22,8 +22,8 @@
   // Start from whatever was used for the last game.
   const last = loadSettings()
   let name = $state(last.name ?? 'You')
-  let opponents = $state<1 | 2>(last.opponents ?? 1)
-  let level = $state<BotLevel>(last.level ?? 'normal')
+  let opponents = $state<1 | 2 | 3>(last.opponents ?? 1)
+  let level = $state<BotLevel>(last.level ?? 'medium')
   let mode = $state<GameMode>(last.mode ?? 'classic')
 
   // The date and time are shown in the viewer's own time zone.
@@ -90,22 +90,28 @@
 
     <fieldset>
       <legend>Computer players</legend>
-      <div class="segment">
+      <div class="segment three">
         <label><input type="radio" name="opponents" value={1} bind:group={opponents} /><span>1 player</span></label>
         <label><input type="radio" name="opponents" value={2} bind:group={opponents} /><span>2 players</span></label>
+        <label><input type="radio" name="opponents" value={3} bind:group={opponents} /><span>3 players</span></label>
       </div>
     </fieldset>
 
     <fieldset>
       <legend>Difficulty</legend>
-      <div class="segment">
+      <div class="segment three">
         <label><input type="radio" name="level" value="easy" bind:group={level} /><span>Easy</span></label>
-        <label><input type="radio" name="level" value="normal" bind:group={level} /><span>Normal</span></label>
+        <label><input type="radio" name="level" value="medium" bind:group={level} /><span>Medium</span></label>
+        <label><input type="radio" name="level" value="expert" bind:group={level} /><span>Expert</span></label>
       </div>
       <p class="hint">
-        {level === 'easy'
-          ? 'Easy players miss good cards and sometimes throw away ones they need.'
-          : 'Normal players grab useful discards, lay down quickly, and hit every card they can.'}
+        {#if level === 'easy'}
+          Easy players miss good cards, sometimes throw away ones they need, and remember nothing about your plays.
+        {:else if level === 'medium'}
+          Medium players play cleanly but have a short memory: only each player's last pickup and last two discards.
+        {:else}
+          Expert players grab useful discards, lay down quickly, hit every card they can, and remember every pickup and discard this round.
+        {/if}
       </p>
     </fieldset>
 
@@ -233,6 +239,9 @@
   }
   .segment.wide {
     grid-template-columns: 1fr;
+  }
+  .segment.three {
+    grid-template-columns: repeat(3, 1fr);
   }
   .segment label {
     position: relative;

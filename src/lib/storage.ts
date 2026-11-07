@@ -5,6 +5,12 @@ import type { BotLevel, GameMode, GameState } from '../engine'
 
 const KEY = 'fase-ten:session:v1'
 
+/** Reads a stored level. Games saved before the levels were renamed called today's expert "normal". */
+export function parseLevel(raw: unknown): BotLevel | undefined {
+  if (raw === 'normal') return 'expert'
+  return raw === 'easy' || raw === 'medium' || raw === 'expert' ? raw : undefined
+}
+
 export interface Session {
   state: GameState
   level: BotLevel
@@ -21,14 +27,14 @@ export function loadSession(): Session | null {
       !Array.isArray(state.players) ||
       state.players.length < 2 ||
       !Array.isArray(state.drawPile) ||
-      (parsed.level !== 'easy' && parsed.level !== 'normal')
+      parseLevel(parsed.level) === undefined
     ) {
       return null
     }
     if (state.status === 'gameOver') return null
     // Games saved by an earlier version are missing newer fields.
     upgradeSavedState(state)
-    return { state, level: parsed.level }
+    return { state, level: parseLevel(parsed.level)! }
   } catch {
     return null
   }
@@ -56,7 +62,7 @@ const SETTINGS_KEY = 'fase-ten:settings:v1'
 
 export interface Settings {
   name: string
-  opponents: 1 | 2
+  opponents: 1 | 2 | 3
   level: BotLevel
   mode: GameMode
 }
@@ -67,8 +73,9 @@ export function parseSettings(raw: unknown): Partial<Settings> {
   const r = raw as Record<string, unknown>
   const out: Partial<Settings> = {}
   if (typeof r.name === 'string' && r.name.trim() !== '') out.name = r.name.trim().slice(0, 16)
-  if (r.opponents === 1 || r.opponents === 2) out.opponents = r.opponents
-  if (r.level === 'easy' || r.level === 'normal') out.level = r.level
+  if (r.opponents === 1 || r.opponents === 2 || r.opponents === 3) out.opponents = r.opponents
+  const level = parseLevel(r.level)
+  if (level) out.level = level
   if (r.mode === 'classic' || r.mode === 'yousee' || r.mode === 'random') out.mode = r.mode
   return out
 }

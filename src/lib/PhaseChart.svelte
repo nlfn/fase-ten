@@ -108,7 +108,7 @@
   }
   th,
   td {
-    padding: 0.38rem 0.35rem;
+    padding: 0.38rem 0.25rem;
     border-bottom: 1px solid rgb(255 255 255 / 0.15);
     text-align: center;
   }
@@ -124,7 +124,7 @@
   }
   .who {
     max-width: 5.5rem;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word; /* keep a name like Karla on one line, only split very long ones */
   }
   tbody th {
     font-weight: 600;

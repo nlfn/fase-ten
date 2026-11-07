@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { DECK_SIZE, nextRandom } from './cards'
-import { createBot } from './bot'
+import { createBot, recall } from './bot'
 import type { Bot, BotLevel } from './bot'
 import { applyAction, createGame, nextRound } from './game'
-import type { GameMode, GameState, PlayerSetup } from './game'
+import type { GameMode, GameState, PlayEvent, PlayerSetup } from './game'
 import { craftedGame, ids, num, nums, skip, wild } from './testUtils'
 
 function seededRandom(seed: number): () => number {
@@ -65,7 +65,7 @@ describe('bot decisions', () => {
   it('lays down a phase as soon as it can', () => {
     const hand = [...nums(5, 5, 5, 9, 9, 9), num(1), num(12), num(12)]
     const s = craftedGame(hand)
-    const action = createBot('normal').chooseAction(s)
+    const action = createBot('expert').chooseAction(s)
     expect(action.type).toBe('layDown')
     const result = applyAction(s, action)
     expect(result.ok).toBe(true)
@@ -82,7 +82,7 @@ describe('bot decisions', () => {
     s = laid.state
     s.melds.push({ id: 99, owner: 1, kind: 'run', start: 4, end: 7, cards: nums(4, 5, 6, 7) })
 
-    const first = createBot('normal').chooseAction(s)
+    const first = createBot('expert').chooseAction(s)
     expect(first).toMatchObject({ type: 'hit', cardId: hand[6].id, meldId: 99 })
   })
 
@@ -93,7 +93,7 @@ describe('bot decisions', () => {
       { name: 'B', isBot: true },
       { name: 'C', isBot: true },
     ] })
-    const action = createBot('normal').chooseAction(s)
+    const action = createBot('expert').chooseAction(s)
     expect(action).toMatchObject({ type: 'discard', cardId: hand[3].id })
     const result = applyAction(s, action)
     expect(result.ok).toBe(true)
@@ -103,7 +103,7 @@ describe('bot decisions', () => {
     // Phase 1 needs two sets of 3. Pairs of 5s and 9s plus a Wild are all worth keeping.
     const hand = [...nums(5, 5, 9, 9), wild(), num(12), num(2), num(7)]
     const s = craftedGame(hand)
-    const action = createBot('normal').chooseAction(s)
+    const action = createBot('expert').chooseAction(s)
     expect(action.type).toBe('discard')
     if (action.type === 'discard') {
       const discarded = hand.find((c) => c.id === action.cardId)!
@@ -117,24 +117,24 @@ describe('bot decisions', () => {
     const s = craftedGame([...nums(5, 5, 9, 9, 1, 2, 3, 12, 11, 4)])
     s.stage = 'draw'
     s.discardPile.push(num(5))
-    expect(createBot('normal').chooseAction(s)).toEqual({ type: 'drawDiscard' })
+    expect(createBot('expert').chooseAction(s)).toEqual({ type: 'drawDiscard' })
     s.discardPile.push(num(8))
-    expect(createBot('normal').chooseAction(s)).toEqual({ type: 'drawDeck' })
+    expect(createBot('expert').chooseAction(s)).toEqual({ type: 'drawDeck' })
   })
 
   it('never tries to pick up a Skip', () => {
     const s = craftedGame([...nums(5, 5, 9, 9, 1, 2, 3, 12, 11, 4)])
     s.stage = 'draw'
     s.discardPile.push(skip())
-    expect(createBot('normal').chooseAction(s)).toEqual({ type: 'drawDeck' })
+    expect(createBot('expert').chooseAction(s)).toEqual({ type: 'drawDeck' })
   })
 })
 
 describe('full games between bots', () => {
   const cases: Array<{ name: string; levels: BotLevel[] }> = [
-    { name: '2 players, normal vs normal', levels: ['normal', 'normal'] },
-    { name: '2 players, easy vs normal', levels: ['easy', 'normal'] },
-    { name: '3 players, mixed levels', levels: ['normal', 'easy', 'normal'] },
+    { name: '2 players, expert vs expert', levels: ['expert', 'expert'] },
+    { name: '2 players, easy vs expert', levels: ['easy', 'expert'] },
+    { name: '3 players, mixed levels', levels: ['expert', 'easy', 'expert'] },
   ]
 
   for (const { name, levels } of cases) {
@@ -152,8 +152,8 @@ describe('full games between bots', () => {
 
 describe('full YouSee games between bots', () => {
   const cases: Array<{ name: string; levels: BotLevel[] }> = [
-    { name: '2 players', levels: ['normal', 'normal'] },
-    { name: '3 players, mixed levels', levels: ['normal', 'easy', 'normal'] },
+    { name: '2 players', levels: ['expert', 'expert'] },
+    { name: '3 players, mixed levels', levels: ['expert', 'easy', 'expert'] },
   ]
 
   for (const { name, levels } of cases) {
@@ -175,7 +175,7 @@ describe('full YouSee games between bots', () => {
     // Five 5s and two 3s can make Phase 9 (7 cards) or Phase 1 (6 cards): the bigger one is chosen.
     const hand = [...nums(5, 5, 5, 5, 5), num(3, 'blue'), num(3, 'green'), num(1), num(2)]
     const s = craftedGame(hand, { mode: 'yousee' })
-    const action = createBot('normal').chooseAction(s)
+    const action = createBot('expert').chooseAction(s)
     expect(action.type).toBe('layDown')
     if (action.type === 'layDown') expect(action.phase).toBe(8)
   })
@@ -184,7 +184,7 @@ describe('full YouSee games between bots', () => {
     const hand = [...nums(5, 5, 5, 5, 5), num(3, 'blue'), num(3, 'green'), num(1), num(2)]
     const s = craftedGame(hand, { mode: 'yousee' })
     s.players[0].done[8] = true
-    const action = createBot('normal').chooseAction(s)
+    const action = createBot('expert').chooseAction(s)
     if (action.type === 'layDown') expect(action.phase).not.toBe(8)
   })
 })
@@ -192,7 +192,7 @@ describe('full YouSee games between bots', () => {
 describe('full Random games between bots', () => {
   it('12 games finish with legal moves, and every winner has completed all ten phases', () => {
     for (let seed = 1; seed <= 12; seed++) {
-      const levels: BotLevel[] = seed % 2 ? ['normal', 'normal'] : ['normal', 'easy', 'normal']
+      const levels: BotLevel[] = seed % 2 ? ['expert', 'expert'] : ['expert', 'easy', 'expert']
       const { state } = playGame(levels, seed, 'random')
       expect(state.status).toBe('gameOver')
       for (const w of state.winners) {
@@ -201,4 +201,90 @@ describe('full Random games between bots', () => {
       }
     }
   }, 60_000)
+})
+
+describe('four players', () => {
+  it('a classic game with four bots finishes with legal moves and no lost cards', () => {
+    for (let seed = 1; seed <= 6; seed++) {
+      const { state } = playGame(['expert', 'medium', 'easy', 'expert'], seed)
+      expect(state.status).toBe('gameOver')
+      expect(state.winners.length).toBeGreaterThan(0)
+    }
+  }, 60_000)
+})
+
+describe('memory', () => {
+  // Phase 1 needs two sets of 3. This hand is one 9 short, and every single card is equally useless,
+  // so without any memory the bot throws the highest-point card, the 12.
+  const hand = () => [...nums(5, 5, 5, 9, 9, 12, 1, 2, 3, 4, 7)]
+  const pickup = (value: number, id: number): PlayEvent => ({
+    player: 1,
+    kind: 'pickup',
+    card: { id, kind: 'number', color: 'red', value },
+  })
+  const discarded = (action: ReturnType<Bot['chooseAction']>, s: GameState) =>
+    action.type === 'discard' ? s.players[0].hand.find((c) => c.id === action.cardId) : undefined
+
+  it('throws the highest card when it remembers nothing', () => {
+    const s = craftedGame(hand())
+    const card = discarded(createBot('expert').chooseAction(s), s)
+    expect(card).toMatchObject({ kind: 'number', value: 12 })
+  })
+
+  it('keeps back a card the opponent picked up', () => {
+    const s = craftedGame(hand())
+    s.events = [pickup(12, 900)]
+    for (const level of ['medium', 'expert'] as const) {
+      const card = discarded(createBot(level).chooseAction(s), s)
+      expect(card).toMatchObject({ kind: 'number' })
+      expect(card && card.kind === 'number' && card.value).not.toBe(12)
+    }
+  })
+
+  it('easy bots remember nothing, so they still throw the 12', () => {
+    const s = craftedGame(hand())
+    s.events = [pickup(12, 900)]
+    const bot = createBot('easy', () => 0.99) // never makes a mistake
+    const card = discarded(bot.chooseAction(s), s)
+    expect(card).toMatchObject({ kind: 'number', value: 12 })
+  })
+
+  it('medium forgets an older pickup, expert does not', () => {
+    const s = craftedGame(hand())
+    s.events = [pickup(12, 900), pickup(3, 901)]
+    const medium = discarded(createBot('medium').chooseAction(s), s)
+    const expert = discarded(createBot('expert').chooseAction(s), s)
+    expect(medium).toMatchObject({ kind: 'number', value: 12 })
+    expect(expert && expert.kind === 'number' && expert.value).not.toBe(12)
+  })
+
+  it('treats a number an opponent threw away as safe to throw', () => {
+    const s = craftedGame(hand())
+    // A 10 picked up makes a 12 slightly risky (a run could use it)...
+    s.events = [pickup(10, 900)]
+    const kept = discarded(createBot('expert').chooseAction(s), s)
+    expect(kept && kept.kind === 'number' && kept.value).not.toBe(12)
+    // ...but they also threw a 12 away, so they clearly do not want one.
+    s.events.push({ player: 1, kind: 'discard', card: { id: 901, kind: 'number', color: 'blue', value: 12 } })
+    const card = discarded(createBot('expert').chooseAction(s), s)
+    expect(card).toMatchObject({ kind: 'number', value: 12 })
+  })
+
+  it('recall keeps one pickup and two discards per opponent for medium, everything for expert', () => {
+    const s = craftedGame(hand())
+    const d = (id: number): PlayEvent => ({
+      player: 1,
+      kind: 'discard',
+      card: { id, kind: 'number', color: 'red', value: 5 },
+    })
+    s.events = [pickup(1, 900), pickup(2, 901), d(902), d(903), d(904)]
+    const medium = recall(s, 0, 'medium').get(1)!
+    expect(medium.picked.map((c) => c.id)).toEqual([901])
+    expect(medium.discarded.map((c) => c.id)).toEqual([903, 904])
+    const expert = recall(s, 0, 'expert').get(1)!
+    expect(expert.picked).toHaveLength(2)
+    expect(expert.discarded).toHaveLength(3)
+    expect(recall(s, 0, 'easy').get(1)).toEqual({ picked: [], discarded: [] })
+    expect(recall(s, 0, 'expert').has(0)).toBe(false)
+  })
 })
