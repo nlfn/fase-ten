@@ -27,6 +27,7 @@ import { cardPoints } from './cards'
 import type { Card } from './cards'
 import { PHASE_COUNT, canHit, findPhaseLayout, phaseMissing, phaseSize } from './phases'
 import type { RunEnd } from './phases'
+import { createHitPlanner, lite, withHit } from './hitPlan'
 import { currentPlayer, hitTargets, topDiscard } from './game'
 import { targetPhase } from './game'
 import type { Action, GameState, Player } from './game'
@@ -159,6 +160,7 @@ export function createBot(level: BotLevel = 'expert', random: () => number = Mat
       meldId: number
       end?: RunEnd
       rank: number
+      left?: number
     }
     const options: Option[] = []
 
@@ -184,7 +186,18 @@ export function createBot(level: BotLevel = 'expert', random: () => number = Mat
       }
     }
     if (options.length === 0) return null
-    options.sort((a, b) => b.rank - a.rank)
+
+    // Look ahead: prefer the card that leaves the least behind once everything that can be played has
+    // been (so Wilds bridge a gap to a card in hand instead of going on someone else's set). The
+    // simple ranking above only decides between plays that are equally good.
+    const planner = createHitPlanner()
+    const bodies = state.melds.map(lite)
+    for (const o of options) {
+      const index = state.melds.findIndex((m) => m.id === o.meldId)
+      const rest = me.hand.filter((c) => c.id !== o.card.id)
+      o.left = planner.best(rest, withHit(bodies, index, o.end))
+    }
+    options.sort((a, b) => (a.left ?? 0) - (b.left ?? 0) || b.rank - a.rank)
     const best = options[0]
     return { type: 'hit', cardId: best.card.id, meldId: best.meldId, end: best.end }
   }

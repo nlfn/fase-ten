@@ -303,6 +303,60 @@ describe('memory', () => {
   })
 })
 
+describe('bridging a run with Wilds', () => {
+  // Ned has laid down a run 6 to 12 and holds two Wilds, a 3 and a 2. The Wilds must stand in as 5 and
+  // 4 so that the 3 and 2 can follow, which goes out. Putting the Wilds on Dirk's set of 10s would
+  // leave the 3 and 2 stuck.
+  it('plays the Wilds on the run so the rest of the hand can follow, and goes out', () => {
+    const s = craftedGame([wild(), wild(), ...nums(3, 2)], { setups: THREE_PLAYERS })
+    s.players[0].laidDown = true
+    s.players[0].laidPhase = 3
+    s.melds.push({ id: 90, owner: 0, kind: 'run', start: 6, end: 12, cards: nums(6, 7, 8, 9, 10, 11, 12) })
+    s.melds.push({ id: 91, owner: 1, kind: 'set', value: 10, cards: nums(10, 10, 10) })
+    const bot = createBot('expert')
+    let state = s
+    for (let i = 0; i < 6 && state.status === 'playing'; i++) {
+      const a = bot.chooseAction(state)
+      if (a.type !== 'hit') break
+      const r = applyAction(state, a)
+      if (!r.ok) throw new Error(r.error)
+      state = r.state
+    }
+    expect(state.status).toBe('roundOver')
+    expect(state.roundResult?.winner).toBe(0)
+    expect(state.melds.find((m) => m.id === 90)).toMatchObject({ start: 2, end: 12 })
+  })
+
+  it('still puts spare Wilds on a set when there is nothing to bridge to', () => {
+    const s = craftedGame([wild(), ...nums(1)], { setups: THREE_PLAYERS })
+    s.players[0].laidDown = true
+    s.melds.push({ id: 90, owner: 0, kind: 'run', start: 6, end: 12, cards: nums(6, 7, 8, 9, 10, 11, 12) })
+    s.melds.push({ id: 91, owner: 1, kind: 'set', value: 10, cards: nums(10, 10, 10) })
+    const a = createBot('expert').chooseAction(s)
+    expect(a).toMatchObject({ type: 'hit' })
+  })
+
+  it('never leaves a card behind that a better order would have played', () => {
+    // Wilds and naturals mixed on several groups: whatever order is chosen, every card gets played.
+    const s = craftedGame([wild(), ...nums(5, 4, 3, 13 - 2)], { setups: THREE_PLAYERS })
+    s.players[0].laidDown = true
+    s.melds.push({ id: 90, owner: 0, kind: 'run', start: 7, end: 9, cards: nums(7, 8, 9) })
+    s.melds.push({ id: 91, owner: 1, kind: 'set', value: 11, cards: nums(11, 11, 11) })
+    const bot = createBot('expert')
+    let state = s
+    for (let i = 0; i < 8 && state.status === 'playing'; i++) {
+      const a = bot.chooseAction(state)
+      if (a.type !== 'hit') break
+      const r = applyAction(state, a)
+      if (!r.ok) throw new Error(r.error)
+      state = r.state
+    }
+    // 5,4,3 can't reach the run at 7 without a 6, so the Wild goes there as the 6 and all of 5, 4, 3 follow;
+    // the 11 goes on the set. The round is over.
+    expect(state.status).toBe('roundOver')
+  })
+})
+
 describe('defense against an opponent who is nearly out', () => {
   // The human (player 0) has laid down with one card left. A run 9 to 11 is on the table, so a 12 or an
   // 8 would let them play. The bot (player 1) needs one more 7 for its phase, and its 12 is its
