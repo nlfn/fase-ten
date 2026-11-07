@@ -33,11 +33,11 @@
     if (!saved) return ''
     const me = saved.state.players[0]
     if (saved.state.mode === 'yousee') {
-      return `YouSee, round ${saved.state.round}, ${me.phase} of 10 phases done`
+      return `You Pick, round ${saved.state.round}, ${me.phase} of 10 phases done`
     }
     const target = targetPhase(saved.state, me)
     const label =
-      saved.state.mode === 'random' ? 'Random, round' : saved.state.mode === 'reverse' ? 'Net Esaf, round' : 'Round'
+      saved.state.mode === 'random' ? 'Random, round' : saved.state.mode === 'reverse' ? 'Backwards, round' : 'Round'
     return `${label} ${saved.state.round}, you are on Phase ${(target ?? 0) + 1}`
   })
 
@@ -72,12 +72,12 @@
     </label>
 
     <fieldset>
-      <legend>Game</legend>
+      <legend>Fase Ordering</legend>
       <div class="segment wide">
-        <label><input type="radio" name="mode" value="classic" bind:group={mode} /><span>Fase Ten</span></label>
-        <label><input type="radio" name="mode" value="yousee" bind:group={mode} /><span>Fase Ten YouSee</span></label>
-        <label><input type="radio" name="mode" value="random" bind:group={mode} /><span>Fase Ten Random</span></label>
-        <label><input type="radio" name="mode" value="reverse" bind:group={mode} /><span>Net Esaf</span></label>
+        <label><input type="radio" name="mode" value="classic" bind:group={mode} /><span>Classic</span></label>
+        <label><input type="radio" name="mode" value="yousee" bind:group={mode} /><span>You Pick</span></label>
+        <label><input type="radio" name="mode" value="random" bind:group={mode} /><span>Random</span></label>
+        <label><input type="radio" name="mode" value="reverse" bind:group={mode} /><span>Backwards</span></label>
       </div>
       <p class="hint">
         {#if mode === 'classic'}
@@ -131,17 +131,17 @@
         you can add cards to any group on the table, called hitting. Go out first to end the round.
       </p>
       <p>
-        <strong>Fase Ten YouSee:</strong> the same game, but you are not locked to the next phase. When you lay
+        <strong>You Pick:</strong> the same game, but you are not locked to the next phase. When you lay
         down, you pick any phase you have not completed yet, and it is decided once the cards are down. Finish all
         ten in any order. The Phase chart button shows what each player has completed.
       </p>
       <p>
-        <strong>Fase Ten Random:</strong> like the classic game, but each player has their own secret random order
+        <strong>Random:</strong> like the classic game, but each player has their own secret random order
         for the ten phases, so everyone is usually on a different phase. You only ever see the phase each player is on
         right now. If you do not complete it, you try the same phase again next round.
       </p>
       <p>
-        <strong>Net Esaf:</strong> Fase Ten spelled backwards, and played that way too. Everyone starts on Phase 10
+        <strong>Backwards:</strong> also called Net Esaf, Fase Ten spelled backwards. Everyone starts on Phase 10
         and works down to Phase 1. Miss your phase and you try it again next round, the same as the classic game.
       </p>
       <ul>
