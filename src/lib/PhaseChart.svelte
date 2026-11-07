@@ -47,7 +47,9 @@
         ? 'Each player can complete the phases in any order, once each.'
         : game.mode === 'random'
           ? 'Each player has their own secret order. You can only see the phase each player is on.'
-          : 'Players work through the phases in order.'}
+          : game.mode === 'reverse'
+            ? 'Net Esaf: players work backwards, from Phase 10 down to Phase 1.'
+            : 'Players work through the phases in order.'}
     </p>
     <div class="scroll">
       <table>
@@ -108,7 +110,7 @@
   }
   th,
   td {
-    padding: 0.38rem 0.35rem;
+    padding: 0.38rem 0.25rem;
     border-bottom: 1px solid rgb(255 255 255 / 0.15);
     text-align: center;
   }
@@ -124,7 +126,7 @@
   }
   .who {
     max-width: 5.5rem;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word; /* keep a name like Karla on one line, only split very long ones */
   }
   tbody th {
     font-weight: 600;

@@ -203,6 +203,30 @@ describe('full Random games between bots', () => {
   }, 60_000)
 })
 
+describe('full Net Esaf games between bots', () => {
+  it('8 games finish with legal moves, and every winner has completed all ten phases', () => {
+    for (let seed = 1; seed <= 8; seed++) {
+      const levels: BotLevel[] = seed % 2 ? ['expert', 'expert'] : ['expert', 'easy', 'medium']
+      const { state } = playGame(levels, seed, 'reverse')
+      expect(state.status).toBe('gameOver')
+      for (const w of state.winners) {
+        expect(state.players[w].done.every(Boolean)).toBe(true)
+        expect(state.players[w].phase).toBe(10)
+      }
+    }
+  }, 60_000)
+})
+
+describe('four players', () => {
+  it('a classic game with four bots finishes with legal moves and no lost cards', () => {
+    for (let seed = 1; seed <= 6; seed++) {
+      const { state } = playGame(['expert', 'medium', 'easy', 'expert'], seed)
+      expect(state.status).toBe('gameOver')
+      expect(state.winners.length).toBeGreaterThan(0)
+    }
+  }, 60_000)
+})
+
 describe('memory', () => {
   // Phase 1 needs two sets of 3. This hand is one 9 short, and every single card is equally useless,
   // so without any memory the bot throws the highest-point card, the 12.

@@ -46,6 +46,9 @@ export function craftedGame(
   s.players[player].hand = hand
   s.players[player].phase = phase
   // In classic mode the earlier phases are done. In yousee, tests set `done` themselves.
-  if (mode === 'classic') s.players[player].done = s.players[player].done.map((_, i) => i < phase)
+  if (mode === 'classic' || mode === 'reverse') {
+    const finished = s.players[player].order.slice(0, phase)
+    s.players[player].done = s.players[player].done.map((_, i) => finished.includes(i))
+  }
   return s
 }

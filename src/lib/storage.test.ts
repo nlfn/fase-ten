@@ -12,7 +12,7 @@ describe('parseSettings', () => {
   })
 
   it('drops anything it does not recognize, keeping the good fields', () => {
-    expect(parseSettings({ name: '   ', opponents: 3, level: 'hard', mode: 'yousee' })).toEqual({ mode: 'yousee' })
+    expect(parseSettings({ name: '   ', opponents: 4, level: 'hard', mode: 'yousee' })).toEqual({ mode: 'yousee' })
   })
 
   it('copes with junk', () => {
@@ -23,6 +23,14 @@ describe('parseSettings', () => {
 
   it('limits very long names', () => {
     expect(parseSettings({ name: 'x'.repeat(200) }).name).toHaveLength(16)
+  })
+})
+
+describe('parseSettings modes', () => {
+  it('knows all four game styles', () => {
+    for (const mode of ['classic', 'yousee', 'random', 'reverse']) {
+      expect(parseSettings({ mode })).toEqual({ mode })
+    }
   })
 })
 

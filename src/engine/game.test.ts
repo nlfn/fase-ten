@@ -233,6 +233,26 @@ describe('Random mode', () => {
     expect(next.players[1].done.some(Boolean)).toBe(false)
   })
 
+  it('Net Esaf starts everyone on Phase 10 and works down', () => {
+    const s = createGame(TWO_PLAYERS, 5, 'reverse')
+    for (const p of s.players) {
+      expect(p.order).toEqual([9, 8, 7, 6, 5, 4, 3, 2, 1, 0])
+      expect(targetPhase(s, p)).toBe(9)
+    }
+    const hand = [...nums(5, 5, 5, 5, 5, 9, 9, 9)] // a set of 5 and a set of 3: Phase 10
+    let g = craftedGame(hand, { mode: 'reverse' })
+    expect(error(g, { type: 'layDown', groups: [ids(hand.slice(0, 3)), ids(hand.slice(5, 8))] })).toMatch(/do not make Phase 10/i)
+    g = run(g, { type: 'layDown', groups: [ids(hand.slice(0, 5)), ids(hand.slice(5, 8))] })
+    expect(g.players[0].laidPhase).toBe(9)
+    expect(g.players[0].done[9]).toBe(true)
+    expect(g.players[0].phase).toBe(1)
+    expect(targetPhase(g, g.players[0])).toBe(8) // Phase 9 comes next
+    // The other player did not finish, so they try Phase 10 again.
+    const next = nextRound(g)
+    expect(targetPhase(next, next.players[1])).toBe(9)
+    expect(targetPhase(next, next.players[0])).toBe(8)
+  })
+
   it('upgrades an older save by giving it the plain order', () => {
     const s = createGame(TWO_PLAYERS, 2)
     const old = structuredClone(s) as unknown as { players: Array<Record<string, unknown>> }

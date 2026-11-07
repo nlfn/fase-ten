@@ -28,9 +28,7 @@ export function pickBotNames(
     (name) => !same(name, playerName) && !banned.some((b) => same(b, name)),
   )
 
-  if (!isFriend) return pool.slice(0, count)
-
-  // Shuffle so the friends who show up as computers vary from game to game.
+  // Shuffle so both the names and the seating order vary from game to game.
   const names = pool.slice()
   for (let i = names.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1))

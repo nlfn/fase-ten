@@ -62,7 +62,7 @@ const SETTINGS_KEY = 'fase-ten:settings:v1'
 
 export interface Settings {
   name: string
-  opponents: 1 | 2
+  opponents: 1 | 2 | 3
   level: BotLevel
   mode: GameMode
 }
@@ -73,10 +73,10 @@ export function parseSettings(raw: unknown): Partial<Settings> {
   const r = raw as Record<string, unknown>
   const out: Partial<Settings> = {}
   if (typeof r.name === 'string' && r.name.trim() !== '') out.name = r.name.trim().slice(0, 16)
-  if (r.opponents === 1 || r.opponents === 2) out.opponents = r.opponents
+  if (r.opponents === 1 || r.opponents === 2 || r.opponents === 3) out.opponents = r.opponents
   const level = parseLevel(r.level)
   if (level) out.level = level
-  if (r.mode === 'classic' || r.mode === 'yousee' || r.mode === 'random') out.mode = r.mode
+  if (r.mode === 'classic' || r.mode === 'yousee' || r.mode === 'random' || r.mode === 'reverse') out.mode = r.mode
   return out
 }
 
