@@ -4,7 +4,7 @@ import { createBot, recall } from './bot'
 import type { Bot, BotLevel } from './bot'
 import { applyAction, createGame, nextRound } from './game'
 import type { GameMode, GameState, PlayEvent, PlayerSetup } from './game'
-import { craftedGame, ids, num, nums, skip, wild } from './testUtils'
+import { THREE_PLAYERS, craftedGame, ids, num, nums, skip, wild } from './testUtils'
 
 function seededRandom(seed: number): () => number {
   let s = seed >>> 0
@@ -300,5 +300,66 @@ describe('memory', () => {
     expect(expert.discarded).toHaveLength(3)
     expect(recall(s, 0, 'easy').get(1)).toEqual({ picked: [], discarded: [] })
     expect(recall(s, 0, 'expert').has(0)).toBe(false)
+  })
+})
+
+describe('defense against an opponent who is nearly out', () => {
+  // The human (player 0) has laid down with one card left. A run 9 to 11 is on the table, so a 12 or an
+  // 8 would let them play. The bot (player 1) needs one more 7 for its phase, and its 12 is its
+  // highest card, so it would normally throw that.
+  const setup = (opponentCards: number, laidDown = true) => {
+    const hand = [...nums(5, 5, 5, 7, 7, 12, 4)]
+    const s = craftedGame(hand, { player: 1 })
+    s.players[0].laidDown = laidDown
+    s.players[0].laidPhase = 0
+    s.players[0].hand = nums(...Array(opponentCards).fill(1))
+    s.melds.push({ id: 99, owner: 0, kind: 'run', start: 9, end: 11, cards: nums(9, 10, 11) })
+    return s
+  }
+  const thrown = (s: GameState, level: BotLevel) => {
+    const a = createBot(level, () => 0.99).chooseAction(s)
+    expect(a.type).toBe('discard')
+    return a.type === 'discard' ? s.players[1].hand.find((c) => c.id === a.cardId) : undefined
+  }
+
+  it('throws the 12 when nobody can use it', () => {
+    expect(thrown(setup(1, false), 'expert')).toMatchObject({ value: 12 })
+  })
+
+  it('leans away from a playable card even when the laid-down opponent has a big hand', () => {
+    expect(thrown(setup(6), 'expert')).toMatchObject({ value: 4 })
+  })
+
+  it('keeps the 12 when a laid-down opponent has one or two cards left', () => {
+    for (const level of ['easy', 'medium', 'expert'] as const) {
+      for (const cards of [1, 2]) {
+        const card = thrown(setup(cards), level)
+        expect(card).toBeDefined()
+        expect(card).not.toMatchObject({ value: 12 })
+        // It still throws the card that costs its own phase the least.
+        expect(card).toMatchObject({ value: 4 })
+      }
+    }
+  })
+
+  it('still throws a playable card when everything it holds is playable', () => {
+    const s = setup(1)
+    s.players[1].hand = nums(12, 8)
+    const card = thrown(s, 'expert')
+    expect(card).toBeDefined()
+  })
+
+  it('aims a Skip at the nearly out player even over a stronger looking opponent', () => {
+    const s = craftedGame([...nums(5, 5, 5, 7, 7, 4), skip()], { player: 1, setups: THREE_PLAYERS })
+    s.players[0].laidDown = true
+    s.players[0].hand = nums(1)
+    s.players[2].laidDown = true
+    s.players[2].phase = 5
+    s.players[2].hand = nums(1, 2, 3, 4, 5, 6, 7, 8)
+    const a = createBot('expert').chooseAction(s)
+    expect(a).toMatchObject({ type: 'discard', skipTarget: 0 })
+    // Even when that player already has a Skip waiting, a second one still goes to them.
+    s.players[0].skipsPending = 1
+    expect(createBot('expert').chooseAction(s)).toMatchObject({ type: 'discard', skipTarget: 0 })
   })
 })

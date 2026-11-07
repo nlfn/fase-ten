@@ -15,6 +15,11 @@
 //  - medium: plays cleanly but only remembers each opponent's last pickup and last two discards.
 //  - expert: plays cleanly and remembers every pickup and discard this round.
 //
+// Defense: once any opponent has laid down they can add cards to the groups on the table, so a
+// discard that fits a group is a gift. If a laid-down opponent is down to two cards or fewer, the
+// bot never discards a card the table can use when it has any other choice, and it aims Skips at
+// that player first.
+//
 // Memory is used when choosing a discard: a card an opponent has been picking up is kept back
 // when the choice is otherwise even, and a number an opponent has thrown away is safe to throw.
 
@@ -189,8 +194,16 @@ export function createBot(level: BotLevel = 'expert', random: () => number = Mat
     let bestScore = -Infinity
     state.players.forEach((p, i) => {
       if (i === state.current) return
+      // Someone who has laid down and is nearly out is the one to stop. This outweighs everything else,
+      // even a pending Skip, since a second Skip costs them another turn.
+      const nearOut = p.laidDown && p.hand.length <= 2
+      const closing = p.laidDown && p.hand.length <= 4
       const score =
-        (p.laidDown ? 50 : 0) + p.phase * 3 + (11 - p.hand.length) - (p.skipsPending > 0 ? 100 : 0)
+        (p.laidDown ? 50 : 0) +
+        p.phase * 3 +
+        (11 - p.hand.length) +
+        (nearOut ? 300 : closing ? 40 : 0) -
+        (p.skipsPending > 0 ? 100 : 0)
       if (score > bestScore) {
         bestScore = score
         best = i
@@ -212,10 +225,22 @@ export function createBot(level: BotLevel = 'expert', random: () => number = Mat
     let candidates: Card[] = hand.filter((c) => c.kind !== 'wild')
     if (candidates.length === 0) candidates = hand.slice()
 
+    // An opponent who has laid down can add cards to any group on the table.
+    const others = state.players.filter((_, i) => i !== state.current)
+    const exposed = others.some((p) => p.laidDown)
+    const usable = (c: Card) => exposed && state.melds.some((m) => canHit(m, c))
+    // When one of them is almost out, do not hand them a card they can play, unless every choice is playable.
+    if (others.some((p) => p.laidDown && p.hand.length <= 2) && !mistake()) {
+      const safe = candidates.filter((c) => !usable(c))
+      if (safe.length > 0) candidates = safe
+    }
+
     // Highest points first, so ties go to the card that is riskiest to hold. Cards that would help
     // an opponent are kept back when everything else is even.
     const memory = recall(state, state.current, level)
-    const danger = new Map(candidates.map((c) => [c.id, discardDanger(state, memory, c)]))
+    const danger = new Map(
+      candidates.map((c) => [c.id, discardDanger(state, memory, c) + (usable(c) ? 2 : 0)]),
+    )
     candidates.sort((a, b) => cardPoints(b) - cardPoints(a) || danger.get(a.id)! - danger.get(b.id)!)
 
     if (me.laidDown || mistake()) {
