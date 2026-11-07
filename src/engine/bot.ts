@@ -10,7 +10,13 @@
 //  - Discard: Skip cards first (aimed at the most dangerous opponent), then
 //    the highest-point card that does not hurt the phase. Wilds are kept.
 //
-// The 'easy' level makes deliberate mistakes some of the time.
+// Levels:
+//  - easy:   makes deliberate mistakes some of the time and remembers nothing about the others.
+//  - medium: plays cleanly but only remembers each opponent's last pickup and last two discards.
+//  - expert: plays cleanly and remembers every pickup and discard this round.
+//
+// Memory is used when choosing a discard: a card an opponent has been picking up is kept back
+// when the choice is otherwise even, and a number an opponent has thrown away is safe to throw.
 
 import { cardPoints } from './cards'
 import type { Card } from './cards'
@@ -20,16 +26,72 @@ import { currentPlayer, hitTargets, topDiscard } from './game'
 import { targetPhase } from './game'
 import type { Action, GameState, Player } from './game'
 
-export type BotLevel = 'easy' | 'normal'
+export type BotLevel = 'easy' | 'medium' | 'expert'
 
 export interface Bot {
   level: BotLevel
   chooseAction(state: GameState): Action
 }
 
-const MISTAKE_RATE: Record<BotLevel, number> = { easy: 0.35, normal: 0 }
+const MISTAKE_RATE: Record<BotLevel, number> = { easy: 0.35, medium: 0, expert: 0 }
 
-export function createBot(level: BotLevel = 'normal', random: () => number = Math.random): Bot {
+/** How much of each opponent's recent play a level can recall. */
+const MEMORY: Record<BotLevel, { pickups: number; discards: number }> = {
+  easy: { pickups: 0, discards: 0 },
+  medium: { pickups: 1, discards: 2 },
+  expert: { pickups: Infinity, discards: Infinity },
+}
+
+export interface Recall {
+  picked: Card[] // cards the opponent took from the discard pile, oldest first
+  discarded: Card[] // cards the opponent threw away, oldest first
+}
+
+/** What a bot of this level remembers about each other player, from this round's plays. */
+export function recall(state: GameState, me: number, level: BotLevel): Map<number, Recall> {
+  const limit = MEMORY[level]
+  const memory = new Map<number, Recall>()
+  state.players.forEach((_, i) => {
+    if (i !== me) memory.set(i, { picked: [], discarded: [] })
+  })
+  for (const e of state.events) {
+    const entry = memory.get(e.player)
+    if (!entry) continue
+    if (e.kind === 'pickup') entry.picked.push(e.card)
+    else if (e.kind === 'discard' || e.kind === 'skip') entry.discarded.push(e.card)
+  }
+  for (const entry of memory.values()) {
+    entry.picked = limit.pickups === 0 ? [] : entry.picked.slice(-limit.pickups)
+    entry.discarded = limit.discards === 0 ? [] : entry.discarded.slice(-limit.discards)
+  }
+  return memory
+}
+
+/**
+ * How much giving this card away could help someone who has not laid down yet. A number an
+ * opponent picked up is wanted (same number for a set, a neighbor for a run); a number they threw
+ * away is not.
+ */
+export function discardDanger(state: GameState, memory: Map<number, Recall>, card: Card): number {
+  if (card.kind !== 'number') return 0
+  let danger = 0
+  for (const [index, entry] of memory) {
+    if (state.players[index].laidDown) continue
+    let mine = 0
+    for (const w of entry.picked) {
+      if (w.kind !== 'number') continue
+      if (w.value === card.value) mine += 3
+      else if (Math.abs(w.value - card.value) <= 2) mine += 1
+    }
+    for (const d of entry.discarded) {
+      if (d.kind === 'number' && d.value === card.value) mine -= 2
+    }
+    danger += Math.max(0, mine)
+  }
+  return danger
+}
+
+export function createBot(level: BotLevel = 'expert', random: () => number = Math.random): Bot {
   const mistake = () => random() < MISTAKE_RATE[level]
 
   /** The phases this player could still lay down this round. */
@@ -150,8 +212,11 @@ export function createBot(level: BotLevel = 'normal', random: () => number = Mat
     let candidates: Card[] = hand.filter((c) => c.kind !== 'wild')
     if (candidates.length === 0) candidates = hand.slice()
 
-    // Highest points first, so ties go to the card that is riskiest to hold.
-    candidates.sort((a, b) => cardPoints(b) - cardPoints(a))
+    // Highest points first, so ties go to the card that is riskiest to hold. Cards that would help
+    // an opponent are kept back when everything else is even.
+    const memory = recall(state, state.current, level)
+    const danger = new Map(candidates.map((c) => [c.id, discardDanger(state, memory, c)]))
+    candidates.sort((a, b) => cardPoints(b) - cardPoints(a) || danger.get(a.id)! - danger.get(b.id)!)
 
     if (me.laidDown || mistake()) {
       return { type: 'discard', cardId: candidates[0].id }
@@ -160,11 +225,14 @@ export function createBot(level: BotLevel = 'normal', random: () => number = Mat
     // Before laying down: throw the card whose loss hurts the phase least.
     let best = candidates[0]
     let bestMissing = Infinity
+    let bestDanger = Infinity
     for (const c of candidates) {
       const rest = hand.filter((h) => h.id !== c.id)
       const missing = missingFor(state, me, rest)
-      if (missing < bestMissing) {
+      const risk = danger.get(c.id)!
+      if (missing < bestMissing || (missing === bestMissing && risk < bestDanger)) {
         bestMissing = missing
+        bestDanger = risk
         best = c
       }
     }

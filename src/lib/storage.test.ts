@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseSettings } from './storage'
+import { parseLevel, parseSettings } from './storage'
 
 describe('parseSettings', () => {
   it('keeps valid values', () => {
@@ -23,5 +23,23 @@ describe('parseSettings', () => {
 
   it('limits very long names', () => {
     expect(parseSettings({ name: 'x'.repeat(200) }).name).toHaveLength(16)
+  })
+})
+
+describe('parseLevel', () => {
+  it('accepts the three levels', () => {
+    expect(parseLevel('easy')).toBe('easy')
+    expect(parseLevel('medium')).toBe('medium')
+    expect(parseLevel('expert')).toBe('expert')
+  })
+
+  it('treats the old "normal" level as expert', () => {
+    expect(parseLevel('normal')).toBe('expert')
+    expect(parseSettings({ level: 'normal' })).toEqual({ level: 'expert' })
+  })
+
+  it('rejects anything else', () => {
+    expect(parseLevel('hard')).toBeUndefined()
+    expect(parseLevel(undefined)).toBeUndefined()
   })
 })

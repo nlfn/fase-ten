@@ -28,7 +28,7 @@ src/engine/    The game itself. Pure TypeScript, no UI code.
   cards.ts     Cards, 108-card deck, point values, seedable shuffle
   phases.ts    The ten phases, set/run/color validation, hitting, solvers
   game.ts      Game state, turn flow, actions, scoring, winning
-  bot.ts       Computer players (easy and normal)
+  bot.ts       Computer players (easy, medium and expert)
   *.test.ts    Unit tests plus full bot-vs-bot games
 src/lib/       The Svelte interface
   Setup.svelte, Game.svelte, CardView.svelte, storage.ts
@@ -63,11 +63,19 @@ A third mode. Like classic, but each player has their own secret random order fo
 
 ## Computer players
 
-Both levels follow the same plan: take a discard only if it brings the hand closer to the phase, lay down as soon as possible, hit every card they can (natural cards first, Wilds last), dump Skips on the most dangerous opponent, and discard the highest-point card that does not hurt the phase. The easy level makes deliberate mistakes about a third of the time.
+All levels follow the same plan: take a discard only if it brings the hand closer to the phase, lay down as soon as possible, hit every card they can (natural cards first, Wilds last), dump Skips on the most dangerous opponent, and discard the highest-point card that does not hurt the phase.
 
-In 60 test games each, the normal player beat the easy player about 88% of the time, and two normal players split evenly. Games last about 11 rounds.
+The levels differ in mistakes and memory:
 
-To add a smarter player, implement the `Bot` interface in `bot.ts` (`chooseAction(state) => Action`). Ideas: track what opponents pick up so you avoid feeding them, hold a Skip until an opponent is close to going out, estimate how likely a phase is to complete.
+- **Easy** makes deliberate mistakes about a third of the time and remembers nothing about the other players.
+- **Medium** plays cleanly but only remembers each opponent's last pickup and last two discards.
+- **Expert** plays cleanly and remembers every pickup and discard this round.
+
+Memory is used when choosing a discard. If two discards are otherwise equal, a bot keeps back a card an opponent has been picking up (the same number for a set, a neighbor for a run) and prefers to throw a number that opponent has thrown away. See `recall` and `discardDanger` in `bot.ts`. Saved games and settings from before the rename that say "normal" are read as expert.
+
+In 300 test games each (both seating orders), expert beat easy 269 to 29, medium beat easy 266 to 32, and expert and medium were level, 146 to 150. So memory changes how the bots play more than it changes who wins. Games last about 11 rounds.
+
+To add a smarter player, implement the `Bot` interface in `bot.ts` (`chooseAction(state) => Action`). Ideas: hold a Skip until an opponent is close to going out, estimate how likely a phase is to complete.
 
 ## Before sharing it publicly
 

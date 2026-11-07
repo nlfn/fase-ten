@@ -219,7 +219,7 @@
   })
 
   // The best-play helper never makes mistakes, whatever the opponents' level is.
-  const autoPlayer = createBot('normal')
+  const autoPlayer = createBot('expert')
 
   /**
    * Lays down the groups and, when the player did not pick the cards themselves, also adds every
