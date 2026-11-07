@@ -253,6 +253,46 @@ describe('Random mode', () => {
     expect(targetPhase(next, next.players[0])).toBe(8)
   })
 
+  it('records who laid down and who was shut out when a round ends', () => {
+    const hand = twoSets()
+    let s = craftedGame(hand, { mode: 'random' })
+    s.players[0].order = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    expect(s.drew).toEqual([false, false])
+    s = run(s, { type: 'layDown', groups: [ids(hand.slice(0, 3)), ids(hand.slice(3, 6))] })
+    const rec = s.scoreHistory[0]
+    expect(rec.winner).toBe(0)
+    expect(rec.laid).toEqual([true, false])
+    // Player 1 never drew a card, so they were shut out. The winner never counts.
+    expect(rec.shutOut).toEqual([false, true])
+  })
+
+  it('does not call someone shut out once they have drawn, even if they never laid down', () => {
+    const hand = twoSets()
+    let s = craftedGame(hand, { mode: 'random' })
+    s.players[0].order = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    s.drew[1] = true
+    s = run(s, { type: 'layDown', groups: [ids(hand.slice(0, 3)), ids(hand.slice(3, 6))] })
+    expect(s.scoreHistory[0].laid).toEqual([true, false])
+    expect(s.scoreHistory[0].shutOut).toEqual([false, false])
+  })
+
+  it('marks a draw from the deck or the discard pile, and starts each round with nobody drawn', () => {
+    let s = createGame(TWO_PLAYERS, 12)
+    expect(s.drew).toEqual([false, false])
+    const first = s.current
+    s = run(s, topDiscard(s)?.kind === 'skip' ? { type: 'drawDeck' } : { type: 'drawDiscard' })
+    expect(s.drew[first]).toBe(true)
+    expect(s.drew[1 - first]).toBe(false)
+  })
+
+  it('an older save that is mid round counts nobody as shut out', () => {
+    const s = createGame(TWO_PLAYERS, 2)
+    const old = structuredClone(s) as unknown as Record<string, unknown>
+    delete old.drew
+    const up = upgradeSavedState(old as unknown as GameState)
+    expect(up.drew).toEqual([true, true])
+  })
+
   it('upgrades an older save by giving it the plain order', () => {
     const s = createGame(TWO_PLAYERS, 2)
     const old = structuredClone(s) as unknown as { players: Array<Record<string, unknown>> }

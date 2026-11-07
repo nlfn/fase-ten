@@ -46,6 +46,8 @@ export interface RoundRecord {
   winner: number | null // who went out
   points: number[] // points each player was given this round
   totals: number[] // each player's total score after this round
+  laid?: boolean[] // who had laid down their phase (missing in rounds recorded by older versions)
+  shutOut?: boolean[] // who was caught without ever drawing a card, for example skipped until the round ended
 }
 
 export type Stage = 'draw' | 'play'
@@ -86,6 +88,7 @@ export interface GameState {
   hits: HitMark[] // recent additions to groups, used to highlight them
   events: PlayEvent[] // recent plays this round, oldest first
   scoreHistory: RoundRecord[] // one entry per finished round, oldest first
+  drew: boolean[] // who has taken a draw so far this round
 }
 
 export type Action =
@@ -160,6 +163,7 @@ export function createGame(
     hits: [],
     events: [],
     scoreHistory: [],
+    drew: [],
   }
   if (mode === 'random') {
     // Each player gets their own order. It is never shown, only the phase they are on.
@@ -212,6 +216,7 @@ function dealRound(state: GameState): void {
   state.melds = []
   state.hits = []
   state.events = []
+  state.drew = state.players.map(() => false)
   state.roundResult = null
   state.status = 'playing'
 
@@ -266,6 +271,8 @@ function endRound(state: GameState, winner: number | null): void {
     winner,
     points,
     totals: state.players.map((p) => p.score),
+    laid: completed,
+    shutOut: state.players.map((p, i) => i !== winner && !p.laidDown && !state.drew[i]),
   })
 
   if (winner !== null) addLog(state, `${state.players[winner].name} went out`)
@@ -299,6 +306,7 @@ export function applyAction(state: GameState, action: Action): ActionResult {
       if (s.stage !== 'draw') return fail('You already drew a card this turn')
       if (!ensureDrawPile(s)) return fail('There are no cards left to draw')
       player.hand.push(s.drawPile.pop() as Card)
+      s.drew[s.current] = true
       s.stage = 'play'
       addLog(s, `${player.name} drew from the deck`)
       addEvent(s, { player: s.current, kind: 'draw' })
@@ -312,6 +320,7 @@ export function applyAction(state: GameState, action: Action): ActionResult {
       if (top.kind === 'skip') return fail('A Skip card cannot be picked up')
       s.discardPile.pop()
       player.hand.push(top)
+      s.drew[s.current] = true
       s.stage = 'play'
       addLog(s, `${player.name} picked up ${cardLabel(top)}`)
       addEvent(s, { player: s.current, kind: 'pickup', card: top })
@@ -427,6 +436,8 @@ export function upgradeSavedState(state: GameState): GameState {
   state.hits ??= []
   state.events ??= []
   state.scoreHistory ??= []
+  // A round that was already under way cannot say who has drawn, so nobody counts as shut out.
+  state.drew ??= state.players.map(() => true)
   state.mode ??= 'classic'
   for (const p of state.players) {
     p.order ??= Array.from({ length: PHASE_COUNT }, (_, i) => i)
