@@ -29,7 +29,7 @@
 <div class="modal-backdrop" role="presentation" onclick={(e) => e.target === e.currentTarget && onClose()}>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="score-title">
     <h2 id="score-title">Scoreboard</h2>
-    <p>Each box is the total after that round, with the points added in that round underneath. Lowest score is best.</p>
+    <p>Each entry is the total after that round, with the points added in that round underneath. Lowest score is best.</p>
 
     {#if history.length === 0}
       <p class="none">No rounds have finished yet.</p>
@@ -49,10 +49,27 @@
               <tr>
                 <th scope="row">{r.round}</th>
                 {#each r.totals as total, i (i)}
-                  <td class:out={r.winner === i}>
-                    <span class="total">{total}</span>
-                    <span class="added">{r.winner === i ? 'out' : `+${r.points[i]}`}</span>
-                  </td>
+                  {#if r.winner === i}
+                    <td class="out">
+                      <span class="boxed">
+                        <span class="total">{total}</span>
+                        <span class="added good">+0<span class="sr"> went out</span></span>
+                      </span>
+                    </td>
+                  {:else if r.shutOut?.[i]}
+                    <td>
+                      <span class="total">{total}</span>
+                      <span class="added fire">+{r.points[i]}</span>
+                      <span class="tag">shut out</span>
+                    </td>
+                  {:else}
+                    <td>
+                      <span class="total">{total}</span>
+                      <span class="added" class:good={r.laid?.[i] === true} class:bad={r.laid?.[i] === false}>
+                        +{r.points[i]}{#if r.laid?.[i] === true}<span class="sr"> laid down</span>{:else if r.laid?.[i] === false}<span class="sr"> caught with a full hand</span>{/if}
+                      </span>
+                    </td>
+                  {/if}
                 {/each}
               </tr>
             {/each}
@@ -75,7 +92,6 @@
           so {missing === 1 ? 'it is' : 'they are'} not listed. The totals are still right.
         </p>
       {/if}
-      <p class="legend"><span class="out-mark">out</span> went out that round (0 points)</p>
     {/if}
     <button type="button" class="primary" bind:this={closeButton} onclick={onClose}>Close</button>
   </div>
@@ -128,10 +144,47 @@
     font-size: 0.75rem;
     color: var(--text-dim);
   }
-  td.out .added,
-  .out-mark {
+  .added.good {
     color: #7ff0a6;
     font-weight: 700;
+  }
+  .added.bad {
+    color: #ff7a7a;
+    font-weight: 700;
+  }
+  /* Whoever went out gets a box around their score. */
+  .boxed {
+    display: inline-block;
+    min-width: 2.4rem;
+    padding: 0.12rem 0.5rem 0.1rem;
+    border: 2px solid #7ff0a6;
+    border-radius: 0.55rem;
+  }
+  /* Caught without ever getting a turn: the points are painted orange to red. */
+  .added.fire {
+    font-size: 1rem;
+    font-weight: 900;
+    background: linear-gradient(#fff3a0, #ffb300 40%, #ff3d00 75%, #a80000);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+  }
+  .tag {
+    display: block;
+    font-size: 0.6rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #ffb347;
+  }
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   tfoot td {
     background: rgb(0 0 0 / 0.18);
@@ -143,8 +196,7 @@
     background: rgb(0 0 0 / 0.18);
   }
   .none,
-  .note,
-  .legend {
+  .note {
     font-size: 0.85rem;
   }
 </style>
