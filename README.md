@@ -75,6 +75,8 @@ The levels differ in mistakes and memory:
 - **Medium** plays cleanly but only remembers each opponent's last pickup and last two discards.
 - **Expert** plays cleanly and remembers every pickup and discard this round.
 
+Hitting looks ahead (`hitPlan.ts`): after laying down, a bot searches the order in which it can add its cards to the table and plays the card that leaves the least behind. This matters most for Wilds, which have to bridge a gap on a run (a Wild as the 5 and another as the 4 so a 3 and a 2 can follow) instead of going on someone else's set. The "auto lay down" button uses the same logic, so it plays out your whole hand the best way it can find.
+
 Defense (all levels except Easy's deliberate mistakes): an opponent who has laid down can add cards to any group on the table, so a discard that fits a group is a gift. If a laid-down opponent has two cards or fewer, a bot will not discard a card the table can use unless every card it holds is usable, and it aims its Skips at that player first, even if they already have one waiting. With bigger opponent hands, usable cards are only a light tie-break.
 
 Memory is used when choosing a discard. If two discards are otherwise equal, a bot keeps back a card an opponent has been picking up (the same number for a set, a neighbor for a run) and prefers to throw a number that opponent has thrown away. See `recall` and `discardDanger` in `bot.ts`. Saved games and settings from before the rename that say "normal" are read as expert.
