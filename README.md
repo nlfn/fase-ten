@@ -84,3 +84,7 @@ To add a smarter player, implement the `Bot` interface in `bot.ts` (`chooseActio
 ## Before sharing it publicly
 
 Phase 10 is a Mattel trademark. A private or hobby project is fine, but if you publish this widely, change the name, and keep the original artwork and branding. The cards here are drawn from scratch.
+
+## Updates
+
+The app is a PWA, so a phone keeps running the version it already has. It looks for a newer one when it opens, whenever it comes back to the foreground, and once an hour. When a new version has been downloaded, the welcome screen shows a "new version available" banner with an Update button, and an x that hides it for a day. The app never reloads by itself, and the banner is only on the welcome screen, so a game in progress is not interrupted. See `src/lib/updates.svelte.ts` and `UpdateBanner.svelte`.

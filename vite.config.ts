@@ -19,7 +19,10 @@ export default defineConfig({
   plugins: [
     svelte(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // A new version waits until the player taps Update on the welcome screen, so a game in
+      // progress is never reloaded underneath them. The app registers itself in src/lib/updates.svelte.ts.
+      registerType: 'prompt',
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
       manifest: {
         name: 'Fase Ten',

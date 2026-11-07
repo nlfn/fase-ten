@@ -34,6 +34,18 @@ body {
   background:
     radial-gradient(120% 90% at 50% 20%, var(--felt-light) 0%, var(--felt) 45%, var(--felt-deep) 100%) fixed;
   overscroll-behavior: none;
+  /* A game board is for tapping, not selecting. This stops accidental text selection and the
+     long-press menu on phones. Places where text is useful are switched back on below. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+input,
+textarea,
+.rules-body {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 :where(button) {

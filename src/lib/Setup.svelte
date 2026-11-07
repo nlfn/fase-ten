@@ -1,6 +1,7 @@
 <script lang="ts">
   import { PHASES, targetPhase } from '../engine'
   import type { BotLevel, GameMode } from '../engine'
+  import UpdateBanner from './UpdateBanner.svelte'
   import { loadSettings, saveSettings } from './storage'
   import type { Session } from './storage'
 
@@ -50,6 +51,7 @@
 </script>
 
 <main class="setup">
+  <UpdateBanner />
   <header>
     <h1>Fase Ten</h1>
     <p class="lead">Ten-phase rummy against the computer. Finish all ten phases before they do.</p>
