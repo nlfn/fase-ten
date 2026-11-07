@@ -48,7 +48,7 @@
         : game.mode === 'random'
           ? 'Each player has their own secret order. You can only see the phase each player is on.'
           : game.mode === 'reverse'
-            ? 'Net Esaf: players work backwards, from Phase 10 down to Phase 1.'
+            ? 'Backwards: players work backwards, from Phase 10 down to Phase 1.'
             : 'Players work through the phases in order.'}
     </p>
     <div class="scroll">
