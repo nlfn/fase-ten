@@ -74,6 +74,13 @@
   const canTakeDiscard = $derived(myTurn && canPickUpDiscard(game))
   // Lay down stays grey until the cards (the selection, if any, else the whole hand) make a phase
   // the player may lay down: the current phase, or in YouSee any phase not completed yet.
+  // Whether the hand as a whole could make a phase this player may lay down. When it cannot (or the
+  // player has already laid down), the only cards worth picking are single ones to hit or discard,
+  // so picking a different card replaces the selection instead of adding to it.
+  const handCanLay = $derived.by(() => {
+    if (me.laidDown || (targetPhase(game, me) === null && !yousee)) return false
+    return PHASES.some((_, i) => (yousee ? !me.done[i] : i === myTarget) && findPhaseLayout(me.hand, i, game.melds) !== null)
+  })
   const canLay = $derived.by(() => {
     if (!myTurn || game.stage !== 'play' || me.laidDown) return false
     if (targetPhase(game, me) === null && !yousee) return false
@@ -188,6 +195,12 @@
     if (card && !selectedIds.includes(id) && (card.kind === 'skip' || holdingSkip)) {
       // A Skip is only ever played on a player, never in a group, so it is selected on its own.
       selectedIds = [id]
+      autoSelected = false
+      notice = ''
+      return
+    }
+    if (!handCanLay) {
+      selectedIds = selectedIds.includes(id) ? [] : [id]
       autoSelected = false
       notice = ''
       return
