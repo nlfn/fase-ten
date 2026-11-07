@@ -75,6 +75,8 @@ The levels differ in mistakes and memory:
 - **Medium** plays cleanly but only remembers each opponent's last pickup and last two discards.
 - **Expert** plays cleanly and remembers every pickup and discard this round.
 
+Defense (all levels except Easy's deliberate mistakes): an opponent who has laid down can add cards to any group on the table, so a discard that fits a group is a gift. If a laid-down opponent has two cards or fewer, a bot will not discard a card the table can use unless every card it holds is usable, and it aims its Skips at that player first, even if they already have one waiting. With bigger opponent hands, usable cards are only a light tie-break.
+
 Memory is used when choosing a discard. If two discards are otherwise equal, a bot keeps back a card an opponent has been picking up (the same number for a set, a neighbor for a run) and prefers to throw a number that opponent has thrown away. See `recall` and `discardDanger` in `bot.ts`. Saved games and settings from before the rename that say "normal" are read as expert.
 
 In 300 test games each (both seating orders), expert beat easy 269 to 29, medium beat easy 266 to 32, and expert and medium were level, 146 to 150. So memory changes how the bots play more than it changes who wins. Games last about 11 rounds.
