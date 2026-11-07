@@ -6,7 +6,7 @@
 
   export interface GameConfig {
     name: string
-    opponents: 1 | 2
+    opponents: 1 | 2 | 3
     level: BotLevel
     mode: GameMode
   }
@@ -22,7 +22,7 @@
   // Start from whatever was used for the last game.
   const last = loadSettings()
   let name = $state(last.name ?? 'You')
-  let opponents = $state<1 | 2>(last.opponents ?? 1)
+  let opponents = $state<1 | 2 | 3>(last.opponents ?? 1)
   let level = $state<BotLevel>(last.level ?? 'medium')
   let mode = $state<GameMode>(last.mode ?? 'classic')
 
@@ -36,7 +36,8 @@
       return `YouSee, round ${saved.state.round}, ${me.phase} of 10 phases done`
     }
     const target = targetPhase(saved.state, me)
-    const label = saved.state.mode === 'random' ? 'Random, round' : 'Round'
+    const label =
+      saved.state.mode === 'random' ? 'Random, round' : saved.state.mode === 'reverse' ? 'Net Esaf, round' : 'Round'
     return `${label} ${saved.state.round}, you are on Phase ${(target ?? 0) + 1}`
   })
 
@@ -76,23 +77,27 @@
         <label><input type="radio" name="mode" value="classic" bind:group={mode} /><span>Fase Ten</span></label>
         <label><input type="radio" name="mode" value="yousee" bind:group={mode} /><span>Fase Ten YouSee</span></label>
         <label><input type="radio" name="mode" value="random" bind:group={mode} /><span>Fase Ten Random</span></label>
+        <label><input type="radio" name="mode" value="reverse" bind:group={mode} /><span>Net Esaf</span></label>
       </div>
       <p class="hint">
         {#if mode === 'classic'}
           The classic game. Work through the ten phases in order.
         {:else if mode === 'yousee'}
           Like Yahtzee. Each time you lay down, you choose which phase you are completing. Do them in any order, but each phase only once.
-        {:else}
+        {:else if mode === 'random'}
           Everyone gets their own secret random order for the ten phases. You only see the phase you are on. Miss it and you try it again next round.
+        {:else}
+          Fase Ten backwards. Everyone starts at the hardest phase, Phase 10, and works down to Phase 1.
         {/if}
       </p>
     </fieldset>
 
     <fieldset>
       <legend>Computer players</legend>
-      <div class="segment">
+      <div class="segment three">
         <label><input type="radio" name="opponents" value={1} bind:group={opponents} /><span>1 player</span></label>
         <label><input type="radio" name="opponents" value={2} bind:group={opponents} /><span>2 players</span></label>
+        <label><input type="radio" name="opponents" value={3} bind:group={opponents} /><span>3 players</span></label>
       </div>
     </fieldset>
 
@@ -134,6 +139,10 @@
         <strong>Fase Ten Random:</strong> like the classic game, but each player has their own secret random order
         for the ten phases, so everyone is usually on a different phase. You only ever see the phase each player is on
         right now. If you do not complete it, you try the same phase again next round.
+      </p>
+      <p>
+        <strong>Net Esaf:</strong> Fase Ten spelled backwards, and played that way too. Everyone starts on Phase 10
+        and works down to Phase 1. Miss your phase and you try it again next round, the same as the classic game.
       </p>
       <ul>
         <li><strong>Set:</strong> cards with the same number.</li>

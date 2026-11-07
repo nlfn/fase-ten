@@ -1,6 +1,6 @@
 # Fase Ten
 
-A browser card game based on Phase 10. Play against 1 or 2 computer players, finish all ten phases first. It is an installable PWA, so it also runs offline and can live on an Android home screen without any app store.
+A browser card game based on Phase 10. Play against 1, 2 or 3 computer players, finish all ten phases first. It is an installable PWA, so it also runs offline and can live on an Android home screen without any app store.
 
 Built with Svelte 5, TypeScript, and Vite.
 
@@ -60,6 +60,10 @@ An alternate mode chosen on the welcome screen, played like Yahtzee. Nothing loc
 ### Fase Ten Random
 
 A third mode. Like classic, but each player has their own secret random order for the ten phases, made when the game starts. You only ever see the phase each player is on right now (next to their name and on the Phases chart), never the upcoming ones. If a player does not lay down their phase in a round, they try the same phase again next round. In the engine this is `mode: 'random'` with a shuffled `order` on each player, and `targetPhase(state, player)` gives the phase someone is working on in classic and random games.
+
+### Net Esaf
+
+A fourth mode, Fase Ten spelled backwards. Everyone starts on Phase 10 and works down to Phase 1, one phase at a time, and a missed phase is tried again next round. In the engine this is `mode: 'reverse'`: every player's `order` is the plain order reversed, so `targetPhase` does the rest.
 
 ## Computer players
 

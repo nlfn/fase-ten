@@ -42,9 +42,45 @@ describe('pickBotNames', () => {
     expect(johnSeen.has('Dirk')).toBe(true)
   })
 
-  it('uses the usual computer names for anyone else', () => {
-    expect(pickBotNames('Sam', 1)).toEqual(['Robo'])
-    expect(pickBotNames('Sam', 2)).toEqual(['Robo', 'Chip'])
+  it('uses the usual computer names for anyone else, in a random order', () => {
+    const usual = ['Robo', 'Chip', 'Bolt']
+    const firsts = new Set<string>()
+    for (let i = 0; i < 200; i++) {
+      const names = pickBotNames('Sam', 2)
+      expect(names).toHaveLength(2)
+      expect(new Set(names).size).toBe(2)
+      for (const n of names) expect(usual).toContain(n)
+      firsts.add(names[0])
+    }
+    expect(firsts.size).toBe(3)
     expect(pickBotNames('Robo', 2)).not.toContain('Robo')
+  })
+
+  it('can fill three computer seats for everyone without repeating a name', () => {
+    for (const player of [...FRIEND_NAMES, 'Sam']) {
+      for (let i = 0; i < 100; i++) {
+        const names = pickBotNames(player, 3)
+        expect(names).toHaveLength(3)
+        expect(new Set(names).size).toBe(3)
+      }
+    }
+  })
+
+  it('does not always seat the same name in the same place', () => {
+    // Every name should turn up first and last about equally often.
+    const first: Record<string, number> = {}
+    const second: Record<string, number> = {}
+    const N = 4000
+    for (let i = 0; i < N; i++) {
+      const names = pickBotNames('Ned', 2)
+      first[names[0]] = (first[names[0]] ?? 0) + 1
+      second[names[1]] = (second[names[1]] ?? 0) + 1
+    }
+    for (const name of ['Karla', 'Kael', 'Dirk', 'Raynor']) {
+      expect(first[name]).toBeGreaterThan(N * 0.2)
+      expect(first[name]).toBeLessThan(N * 0.3)
+      expect(second[name]).toBeGreaterThan(N * 0.2)
+      expect(second[name]).toBeLessThan(N * 0.3)
+    }
   })
 })

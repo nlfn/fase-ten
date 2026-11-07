@@ -19,7 +19,7 @@ import type { Meld, RunEnd } from './phases'
  * yousee: when you lay down, you choose which of the phases you have not done yet.
  * random: like classic, but each player gets their own secret random order for the ten phases.
  */
-export type GameMode = 'classic' | 'yousee' | 'random'
+export type GameMode = 'classic' | 'yousee' | 'random' | 'reverse'
 
 export interface Player {
   name: string
@@ -168,6 +168,10 @@ export function createGame(
       state.rngSeed = shuffled.seed
       p.order = shuffled.items
     }
+  }
+  if (mode === 'reverse') {
+    // Net Esaf: everyone starts at Phase 10 and works down to Phase 1.
+    for (const p of state.players) p.order = p.order.slice().reverse()
   }
   dealRound(state)
   return state
