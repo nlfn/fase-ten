@@ -434,4 +434,26 @@ describe('defense against an opponent who is nearly out', () => {
     s.players[0].skipsPending = 1
     expect(createBot('expert').chooseAction(s)).toMatchObject({ type: 'discard', skipTarget: 0 })
   })
+  it('breaks a tie between equal Skip targets by aiming at the lowest score', () => {
+    for (const lowest of [0, 2]) {
+      const s = craftedGame([...nums(5, 5, 5, 7, 7, 4), skip()], { player: 1, setups: THREE_PLAYERS })
+      s.players[0].score = lowest === 0 ? 40 : 90
+      s.players[2].score = lowest === 2 ? 40 : 90
+      for (const level of ['expert', 'medium'] as const) {
+        const a = createBot(level, () => 0.99).chooseAction(s)
+        expect(a).toMatchObject({ type: 'discard', skipTarget: lowest })
+      }
+    }
+  })
+
+  it('aims a Skip at a player on their final phase before a nearly out opponent (Expert)', () => {
+    const s = craftedGame([...nums(5, 5, 5, 7, 7, 4), skip()], { player: 1, setups: THREE_PLAYERS })
+    s.players[0].laidDown = true
+    s.players[0].hand = nums(1)
+    s.players[2].phase = 9
+    s.players[2].hand = nums(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+    expect(createBot('expert').chooseAction(s)).toMatchObject({ type: 'discard', skipTarget: 2 })
+    // Medium has no defense, so it still goes for the laid down player.
+    expect(createBot('medium', () => 0.99).chooseAction(s)).toMatchObject({ type: 'discard', skipTarget: 0 })
+  })
 })
