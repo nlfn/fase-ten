@@ -13,6 +13,12 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 15,
+    date: '2026-11-08',
+    title: 'Scores and Phases in one place',
+    body: 'The Scores and Phases tables now share one window. Tap a tab or swipe sideways to switch, and close it with the x at the top. The end of round page has links to both, and the "shut out" label on the scoreboard fits on one line.',
+  },
+  {
     id: 14,
     date: '2026-11-08',
     title: 'Medium watches the table',
