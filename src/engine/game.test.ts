@@ -387,7 +387,7 @@ describe('score history', () => {
   })
 })
 
-describe('stacked Skips', () => {
+describe('Skips do not stack', () => {
   /** Draws, then discards the first card that is not a Skip. */
   function plainTurn(state: GameState): GameState {
     let t = run(state, { type: 'drawDeck' })
@@ -395,42 +395,52 @@ describe('stacked Skips', () => {
     return run(t, { type: 'discard', cardId: card.id })
   }
 
-  it('two Skips on the same player make them lose two turns', () => {
-    // Player 0 skips player 2, then player 1 also skips player 2, before player 2 has played.
+  function threePlayerSkip(): GameState {
+    // Player 0 skips player 2 before player 2 has played; player 1 holds a Skip of their own.
     let s = craftedGame([skip(), ...nums(1, 2, 3)], { setups: THREE_PLAYERS })
     s.players[1].hand = [skip(), ...nums(4, 5, 6)]
     s = run(s, { type: 'discard', cardId: s.players[0].hand[0].id, skipTarget: 2 })
-    expect(s.current).toBe(1)
-    expect(s.players[2].skipsPending).toBe(1)
+    return run(s, { type: 'drawDeck' })
+  }
 
-    s = run(s, { type: 'drawDeck' })
+  it('refuses a second Skip on a player who is already losing a turn', () => {
+    const s = threePlayerSkip()
     const second = s.players[1].hand.find((c) => c.kind === 'skip')!
-    s = run(s, { type: 'discard', cardId: second.id, skipTarget: 2 })
-    // Player 2 is passed over right away (first lost turn) and one more is still owed.
-    expect(s.current).toBe(0)
+    expect(error(s, { type: 'discard', cardId: second.id, skipTarget: 2 })).toMatch(/already/i)
     expect(s.players[2].skipsPending).toBe(1)
-
-    const order: number[] = []
-    for (let i = 0; i < 4; i++) {
-      s = plainTurn(s)
-      order.push(s.current)
-    }
-    // 0 plays, then 1; 1 plays, then player 2 is passed over a second time, back to 0; then 1; then 2 finally plays.
-    expect(order).toEqual([1, 0, 1, 2])
-    expect(s.players[2].skipsPending).toBe(0)
   })
 
-  it('shows both lost turns in the history', () => {
-    let s = craftedGame([skip(), ...nums(1, 2, 3)], { setups: THREE_PLAYERS })
-    s.players[1].hand = [skip(), ...nums(4, 5, 6)]
-    s = run(s, { type: 'discard', cardId: s.players[0].hand[0].id, skipTarget: 2 })
-    s = run(s, { type: 'drawDeck' })
-    s = run(s, { type: 'discard', cardId: s.players[1].hand.find((c) => c.kind === 'skip')!.id, skipTarget: 2 })
-    for (let i = 0; i < 2; i++) s = plainTurn(s)
-    expect(s.events.filter((e) => e.kind === 'skipped' && e.player === 2)).toHaveLength(2)
+  it('lets the second Skip go to someone else instead', () => {
+    let s = threePlayerSkip()
+    const second = s.players[1].hand.find((c) => c.kind === 'skip')!
+    s = run(s, { type: 'discard', cardId: second.id, skipTarget: 0 })
+    expect(s.players[0].skipsPending).toBe(0) // used up straight away: player 2 is passed over, then player 0
+    expect(s.events.filter((e) => e.kind === 'skipped' && e.player === 2)).toHaveLength(1)
   })
 
-  it('a single Skip still costs exactly one turn', () => {
+  it('just discards a Skip when every other player is already losing a turn', () => {
+    let s = craftedGame([...nums(1, 2, 3)], { setups: THREE_PLAYERS })
+    s.current = 1
+    s.stage = 'play'
+    const sk = skip()
+    s.players[1].hand = [sk, ...nums(4, 5, 6)]
+    s.players[0].skipsPending = 1
+    s.players[2].skipsPending = 1
+    s = run(s, { type: 'discard', cardId: sk.id })
+    expect(topDiscard(s)?.kind).toBe('skip')
+    expect(s.events.some((e) => e.kind === 'skip')).toBe(false)
+    expect(s.players.map((p) => p.skipsPending).every((n) => n <= 1)).toBe(true)
+  })
+
+  it('a lost turn is only ever lost once', () => {
+    let s = threePlayerSkip()
+    s = run(s, { type: 'discard', cardId: s.players[1].hand.find((c) => c.kind !== 'skip')!.id })
+    // Player 2 was passed over once, and it is player 0 to play.
+    expect(s.current).toBe(0)
+    expect(s.events.filter((e) => e.kind === 'skipped' && e.player === 2)).toHaveLength(1)
+  })
+
+  it('a single Skip costs the chosen player exactly one turn', () => {
     let s = craftedGame([skip(), ...nums(1, 2, 3)], { setups: THREE_PLAYERS })
     s = run(s, { type: 'discard', cardId: s.players[0].hand[0].id, skipTarget: 1 })
     expect(s.current).toBe(2)
@@ -438,6 +448,12 @@ describe('stacked Skips', () => {
     expect(s.current).toBe(0)
     s = plainTurn(s)
     expect(s.current).toBe(1)
+  })
+
+  it('a saved game that stacked Skips is brought back to one lost turn', () => {
+    const s = createGame(THREE_PLAYERS, 5)
+    s.players[1].skipsPending = 2
+    expect(upgradeSavedState(s).players[1].skipsPending).toBe(1)
   })
 
   it('upgrades an older save that stored a yes/no flag', () => {

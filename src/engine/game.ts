@@ -30,7 +30,7 @@ export interface Player {
   done: boolean[] // which of the ten phases this player has completed
   laidPhase: number | null // the phase laid down this round (counts as done when the round ends)
   laidDown: boolean // has laid down this round
-  skipsPending: number // how many of their upcoming turns they will lose; each Skip played on them adds one
+  skipsPending: number // 1 if they will lose their next turn. Skips never stack, so it is never more than 1
   score: number // lower is better
 }
 
@@ -398,13 +398,18 @@ export function applyAction(state: GameState, action: Action): ActionResult {
 
       let target: number | null = null
       if (card.kind === 'skip') {
-        if (n === 2) {
-          target = (s.current + 1) % 2
+        // A player who is already losing a turn cannot be skipped again: Skips do not stack.
+        const open = s.players.map((_, i) => i).filter((i) => i !== s.current && s.players[i].skipsPending === 0)
+        if (open.length === 0) {
+          // Everyone else is already skipped, so the Skip is simply discarded.
+        } else if (n === 2) {
+          target = open[0]
         } else {
           const t = action.skipTarget
           if (t === undefined || t === s.current || !s.players[t]) {
             return fail('Choose which player to skip')
           }
+          if (s.players[t].skipsPending > 0) return fail('That player is already losing a turn')
           target = t
         }
       }
@@ -440,12 +445,12 @@ export function discardLastCard(state: GameState, who: number): GameState {
   if (state.status !== 'playing' || state.stage !== 'play' || state.current !== who) return state
   if (!player || !player.laidDown || player.hand.length !== 1) return state
   const card = player.hand[0]
-  // A Skip needs a target even though the round is about to end; any other player will do.
-  const target = state.players.findIndex((_, i) => i !== who)
+  // A Skip needs a target even though the round is about to end; any player who is not already skipped will do.
+  const target = state.players.findIndex((p, i) => i !== who && p.skipsPending === 0)
   const result = applyAction(state, {
     type: 'discard',
     cardId: card.id,
-    skipTarget: card.kind === 'skip' ? target : undefined,
+    skipTarget: card.kind === 'skip' && target >= 0 ? target : undefined,
   })
   return result.ok ? result.state : state
 }
@@ -465,7 +470,7 @@ export function upgradeSavedState(state: GameState): GameState {
     p.laidPhase ??= p.laidDown ? Math.min(p.phase, PHASE_COUNT - 1) : null
     // Older saves kept a yes/no flag called `skipped`.
     const legacy = p as unknown as { skipped?: boolean }
-    p.skipsPending ??= legacy.skipped ? 1 : 0
+    p.skipsPending = Math.min(1, p.skipsPending ?? (legacy.skipped ? 1 : 0)) // early saves could stack Skips
     delete legacy.skipped
   }
   return state

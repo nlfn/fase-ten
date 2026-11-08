@@ -93,10 +93,13 @@
   const anyMarked = $derived(game.melds.some((m) => m.cards.some((c) => markedIds.has(c.id))))
   const selectedCards = $derived(me.hand.filter((c) => selectedIds.includes(c.id)))
   const skipSelected = $derived(selectedCards.length === 1 && selectedCards[0].kind === 'skip')
-  // A Skip is never just thrown away: it has to be played on someone, like adding to a group.
-  const canPlaySkip = $derived(myTurn && game.stage === 'play' && skipSelected)
+  // A Skip has to be played on someone, like adding to a group, and a player who is already losing a
+  // turn cannot be skipped again. If everyone else is already skipped it is just discarded.
+  const skipTargets = $derived(game.players.map((p, i) => i !== HUMAN && p.skipsPending === 0))
+  const noSkipTarget = $derived(!skipTargets.some(Boolean))
+  const canPlaySkip = $derived(myTurn && game.stage === 'play' && skipSelected && !noSkipTarget)
   const canDiscard = $derived(
-    myTurn && game.stage === 'play' && selectedCards.length === 1 && !skipSelected,
+    myTurn && game.stage === 'play' && selectedCards.length === 1 && (!skipSelected || noSkipTarget),
   )
 
   const hitMap = $derived.by(() => {
@@ -111,6 +114,7 @@
     if (!myTurn) return `${cur.name} is playing`
     if (game.stage === 'draw') return 'Your turn. Draw from the deck or take the top discard.'
     if (canPlaySkip) return 'Choose who loses a turn.'
+    if (skipSelected && noSkipTarget) return 'Everyone else is already losing a turn, so this Skip has no effect. Discard it to end your turn.'
     if (!me.laidDown) {
       return yousee
         ? 'Lay down any phase you have not completed when you can, then discard one card.'
@@ -435,13 +439,13 @@
       <div
         class="player"
         class:turn={game.status === 'playing' && game.current === i}
-        class:target={canPlaySkip && i !== HUMAN}
+        class:target={canPlaySkip && skipTargets[i]}
       >
         <div class="phead">
           <span class="pname">{p.name}</span>
           {#if p.laidDown}<span class="badge ok">Laid down</span>{/if}
           {#if p.skipsPending > 0}
-            <span class="badge warn">{p.skipsPending > 1 ? `Loses ${p.skipsPending} turns` : 'Loses a turn'}</span>
+            <span class="badge warn">Loses a turn</span>
           {/if}
         </div>
         <div class="pstats">
@@ -452,7 +456,7 @@
         {#if goalLine(p)}
           <p class="pgoal">{goalLine(p)}</p>
         {/if}
-        {#if canPlaySkip && i !== HUMAN}
+        {#if canPlaySkip && skipTargets[i]}
           <button type="button" class="chip" onclick={() => playSkipOn(i)}>Play on {p.name}</button>
         {/if}
       </div>
