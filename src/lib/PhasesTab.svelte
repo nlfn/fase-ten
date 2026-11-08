@@ -50,11 +50,16 @@
     </thead>
     <tbody>
       {#each PHASES as phase, pi (phase.number)}
+        {@const parts = phase.description.split(' + ')}
         <tr>
           <th scope="row">
             <div class="label">
               <span class="num">{phase.number}</span>
-              <span class="desc">{phase.description}</span>
+              <span class="desc">
+                {#each parts as part, i (i)}
+                  <span class:keep={parts.length > 1}>{part}{i < parts.length - 1 ? ' +' : ''}</span>{' '}
+                {/each}
+              </span>
             </div>
           </th>
           {#each game.players as _, i (i)}
@@ -120,6 +125,10 @@
     display: flex;
     gap: 0.5rem;
     align-items: baseline;
+  }
+  /* When a phase has two groups, a wrap falls between them, so each group's number stays with it. */
+  .keep {
+    white-space: nowrap;
   }
   .num {
     flex: none;
