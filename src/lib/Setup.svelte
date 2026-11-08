@@ -2,6 +2,7 @@
   import { PHASES, targetPhase } from '../engine'
   import type { BotLevel, GameMode } from '../engine'
   import UpdateBanner from './UpdateBanner.svelte'
+  import WhatsNew from './WhatsNew.svelte'
   import { loadSettings, saveSettings } from './storage'
   import type { Session } from './storage'
 
@@ -51,6 +52,7 @@
 </script>
 
 <main class="setup">
+  <WhatsNew />
   <UpdateBanner />
   <header>
     <h1>Fase Ten</h1>

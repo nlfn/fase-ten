@@ -94,3 +94,5 @@ Phase 10 is a Mattel trademark. A private or hobby project is fine, but if you p
 ## Updates
 
 The app is a PWA, so a phone keeps running the version it already has. It looks for a newer one when it opens, whenever it comes back to the foreground, and once an hour. When a new version has been downloaded, the welcome screen shows a "new version available" banner with an Update button, and an x that hides it for a day. The app never reloads by itself, and the banner is only on the welcome screen, so a game in progress is not interrupted. See `src/lib/updates.svelte.ts` and `UpdateBanner.svelte`.
+
+After an update, the welcome screen also shows a "What's new" list of the changes since the last version that browser opened. The entries live in `src/lib/changelog.ts`: add one with the next number for any change worth mentioning (no em dashes, plain text). The newest number seen is kept in localStorage. A brand new player sees nothing, and a returning player who has never seen the list gets all of it once.
