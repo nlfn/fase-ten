@@ -13,6 +13,12 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 12,
+    date: '2026-11-07',
+    title: 'Update button shows progress',
+    body: 'Tapping Update on the welcome screen now shows a spinner and "Updating..." while the new version loads, instead of looking like nothing happened.',
+  },
+  {
     id: 11,
     date: '2026-11-07',
     title: 'This What\'s new screen',

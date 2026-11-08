@@ -17,6 +17,8 @@ export const updates = $state({
   ready: false,
   /** The player hid the banner for a day. */
   snoozed: readSnoozed(),
+  /** Update was tapped and the page is about to reload. */
+  installing: false,
 })
 
 let applyUpdate: ((reload?: boolean) => Promise<void>) | undefined
@@ -45,9 +47,19 @@ export function startUpdateChecks(): void {
   })
 }
 
-/** Switches to the new version. This reloads the page, so only the welcome screen offers it. */
+/** How long to wait for the switch before reloading the page ourselves. */
+const RELOAD_FALLBACK_MS = 8000
+
+/**
+ * Switches to the new version. This reloads the page, so only the welcome screen offers it. The switch
+ * takes a moment, so the banner shows it is working, and if the page has not reloaded by itself after
+ * a few seconds it is reloaded here (the new version is already active by then).
+ */
 export function installUpdate(): void {
+  if (updates.installing) return
+  updates.installing = true
   void applyUpdate?.(true)
+  setTimeout(() => window.location.reload(), RELOAD_FALLBACK_MS)
 }
 
 /** Hides the banner for a day. */
