@@ -83,11 +83,14 @@
       ontouchstart={touchStart}
       ontouchend={touchEnd}
     >
-      {#if tab === 'scores'}
+      <!-- Both tabs are built as soon as the sheet opens, so switching only has to show one. The one
+           that is not showing stays laid out at full width but is clipped to nothing and not painted. -->
+      <div class="pane" class:off={tab !== 'scores'} inert={tab !== 'scores'}>
         <ScoresTab {game} />
-      {:else}
+      </div>
+      <div class="pane" class:off={tab !== 'phases'} inert={tab !== 'phases'}>
         <PhasesTab {game} />
-      {/if}
+      </div>
     </div>
     <div class="dots" aria-hidden="true">
       {#each TABS as t (t.id)}<i class:on={tab === t.id}></i>{/each}
@@ -147,9 +150,22 @@
     align-content: start;
     gap: 0.7rem;
     overscroll-behavior: contain;
+    position: relative; /* the pane that is not showing is placed against this */
   }
-  .body > :global(:first-child) {
+  .pane {
+    display: grid;
+    gap: 0.7rem;
     margin-top: 0.8rem;
+  }
+  .pane.off {
+    position: absolute;
+    top: 0;
+    left: 1rem;
+    right: 1rem;
+    height: 0;
+    margin: 0;
+    overflow: hidden;
+    visibility: hidden;
   }
   .dots {
     flex: none;
