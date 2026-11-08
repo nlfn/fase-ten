@@ -141,11 +141,15 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 0.8rem 1rem 0.6rem;
+    /* No padding at the top, so a pinned table header sits flush against the edge. */
+    padding: 0 1rem 0.6rem;
     display: grid;
     align-content: start;
     gap: 0.7rem;
     overscroll-behavior: contain;
+  }
+  .body > :global(:first-child) {
+    margin-top: 0.8rem;
   }
   .dots {
     flex: none;
