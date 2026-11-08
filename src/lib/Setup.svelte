@@ -138,7 +138,7 @@
       <p>
         <strong>You Pick:</strong> the same game, but you are not locked to the next phase. When you lay
         down, you pick any phase you have not completed yet, and it is decided once the cards are down. Finish all
-        ten in any order. The Phase chart button shows what each player has completed.
+        ten in any order. The Phases button shows what each player has completed.
       </p>
       <p>
         <strong>Random:</strong> like the classic game, but each player has their own secret random order

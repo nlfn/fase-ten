@@ -20,8 +20,8 @@
   } from '../engine'
   import type { Action, Card, GameState, HitTarget, Meld, RunEnd } from '../engine'
   import CardView from './CardView.svelte'
-  import PhaseChart from './PhaseChart.svelte'
-  import Scoreboard from './Scoreboard.svelte'
+  import Sheet from './Sheet.svelte'
+  import type { SheetTab } from './Sheet.svelte'
   import { groupTurns } from './turns'
   import PhasePicker from './PhasePicker.svelte'
   import type { PhaseOption } from './PhasePicker.svelte'
@@ -52,8 +52,8 @@
   // States from before each lay down or hit this turn, so those moves can be taken back.
   // Drawing and discarding clear it: they cannot be undone.
   let undoStack = $state.raw<GameState[]>([])
-  let showChart = $state(false)
-  let showScores = $state(false)
+  // The Scores and Phases tables share one sheet; this is the tab it is open on, or null if closed.
+  let sheet = $state<SheetTab | null>(null)
   let showPicker = $state(false)
   let confirmQuit = $state(false)
   let keepPlaying = $state<HTMLButtonElement>()
@@ -428,8 +428,8 @@
     {:else}
       <p class="goal"><strong>Phase {myTarget + 1}</strong> {phaseDescription(myTarget)}</p>
     {/if}
-    <button type="button" class="ghost" onclick={() => (showScores = true)}>Scores</button>
-    <button type="button" class="ghost" onclick={() => (showChart = true)}>Phases</button>
+    <button type="button" class="ghost" onclick={() => (sheet = 'scores')}>Scores</button>
+    <button type="button" class="ghost" onclick={() => (sheet = 'phases')}>Phases</button>
     <button type="button" class="ghost" onclick={onExit}>Menu</button>
     <button type="button" class="ghost" onclick={() => (confirmQuit = true)}>Quit</button>
   </header>
@@ -633,12 +633,8 @@
     </div>
   {/if}
 
-  {#if showChart}
-    <PhaseChart {game} onClose={() => (showChart = false)} />
-  {/if}
-
-  {#if showScores}
-    <Scoreboard {game} onClose={() => (showScores = false)} />
+  {#if sheet}
+    <Sheet {game} start={sheet} onClose={() => (sheet = null)} />
   {/if}
 
   {#if game.status !== 'playing' && resultHidden}
@@ -698,6 +694,10 @@
             {/each}
           </tbody>
         </table>
+        <div class="result-links">
+          <button type="button" class="link" onclick={() => (sheet = 'scores')}>Scores</button>
+          <button type="button" class="link" onclick={() => (sheet = 'phases')}>Phases</button>
+        </div>
         <div class="result-actions">
           <button type="button" class="ghost big" onclick={() => (resultHidden = true)}>View table</button>
           {#if game.status === 'gameOver'}
@@ -1121,6 +1121,18 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0.6rem;
+  }
+  .result-links {
+    display: flex;
+    justify-content: center;
+    gap: 1.4rem;
+  }
+  .link {
+    padding: 0.2rem 0.3rem;
+    background: none;
+    color: var(--gold);
+    font-weight: 800;
+    text-decoration: underline;
   }
   .result-bar {
     position: fixed;
