@@ -13,6 +13,12 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 13,
+    date: '2026-11-07',
+    title: 'Skips no longer stack',
+    body: 'Following the official rules, a player who is already losing a turn cannot be skipped again. You can only play a Skip on someone else, and if everyone else is already skipped it is just discarded.',
+  },
+  {
     id: 12,
     date: '2026-11-07',
     title: 'Update button shows progress',
@@ -75,8 +81,8 @@ export const CHANGELOG: ChangeEntry[] = [
   {
     id: 2,
     date: '2026-11-06',
-    title: 'Skips stack',
-    body: 'Each Skip played on a player costs them a turn, so two Skips cost two turns. Lay down stays grey until you can lay down a phase.',
+    title: 'Lay down button',
+    body: 'Lay down stays grey until you can lay down a phase.',
   },
   {
     id: 1,

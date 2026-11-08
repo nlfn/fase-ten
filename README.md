@@ -43,7 +43,7 @@ The engine is the important part. Everything a player does is an action (`drawDe
 - A turn is draw (deck, or the top discard unless it is a Skip), optionally lay down and hit, then discard.
 - After laying down you can add cards to any group on the table, yours or an opponent's, including on the same turn you laid down.
 - Going out can happen by hitting or discarding your last card.
-- A discarded Skip makes the chosen player lose their next turn. If the first card turned up is a Skip, the first player loses their turn.
+- A discarded Skip makes the chosen player lose their next turn. Skips do not stack: a player who is already losing a turn cannot be skipped again, and if every other player is already skipped the Skip is just discarded. If the first card turned up is a Skip, the first player loses their turn.
 - Cards left in hand: 1 to 9 are 5 points, 10 to 12 are 10, Skip is 15, Wild is 25. The player who goes out scores 0.
 - You advance only if you laid down your phase. Finish Phase 10 to end the game; if several players finish in the same round, the lowest score wins.
 
@@ -77,7 +77,7 @@ The levels differ in mistakes and memory:
 
 Hitting looks ahead (`hitPlan.ts`, Easy and Expert; Medium hits greedily): after laying down, a bot searches the order in which it can add its cards to the table and plays the card that leaves the least behind. This matters most for Wilds, which have to bridge a gap on a run (a Wild as the 5 and another as the 4 so a 3 and a 2 can follow) instead of going on someone else's set. The "auto lay down" button uses the same logic, so it plays out your whole hand the best way it can find.
 
-Defense (Easy and Expert, apart from Easy's deliberate mistakes; Medium does not do this): an opponent who has laid down can add cards to any group on the table, so a discard that fits a group is a gift. If a laid-down opponent has two cards or fewer, a bot will not discard a card the table can use unless every card it holds is usable, and it aims its Skips at that player first, even if they already have one waiting. With bigger opponent hands, usable cards are only a light tie-break.
+Defense (Easy and Expert, apart from Easy's deliberate mistakes; Medium does not do this): an opponent who has laid down can add cards to any group on the table, so a discard that fits a group is a gift. If a laid-down opponent has two cards or fewer, a bot will not discard a card the table can use unless every card it holds is usable, and it aims its Skips at that player first. With bigger opponent hands, usable cards are only a light tie-break.
 
 Skip targeting (every level): a player on their last phase is the first choice, since they can end the whole game, then a player on their second to last phase, with a smaller nudge for the one before that. When two opponents are equally dangerous the Skip goes to the lowest total score, and if that is tied too, to a random one.
 

@@ -153,7 +153,7 @@
         <li><strong>Set:</strong> cards with the same number.</li>
         <li><strong>Run:</strong> cards in number order, any colors. No wrapping from 12 to 1.</li>
         <li><strong>Wild:</strong> stands in for any card. Every group needs at least one regular card.</li>
-        <li><strong>Skip:</strong> can't be used in a group. Discard it to make another player lose a turn.</li>
+        <li><strong>Skip:</strong> can't be used in a group. Discard it to make another player lose a turn. A player who is already losing a turn can't be skipped again.</li>
         <li><strong>Points left in hand:</strong> 1 to 9 are 5 each, 10 to 12 are 10 each, Skip is 15, Wild is 25.</li>
         <li>You only get credit for a phase if you laid it down.</li>
         <li>
