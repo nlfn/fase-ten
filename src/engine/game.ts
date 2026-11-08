@@ -401,7 +401,8 @@ export function applyAction(state: GameState, action: Action): ActionResult {
         // A player who is already losing a turn cannot be skipped again: Skips do not stack.
         const open = s.players.map((_, i) => i).filter((i) => i !== s.current && s.players[i].skipsPending === 0)
         if (open.length === 0) {
-          // Everyone else is already skipped, so the Skip is simply discarded.
+          // Cannot happen in normal play (whoever moved just before is never skipped), but a damaged
+          // saved game should not leave the player stuck holding a Skip, so it is just discarded.
         } else if (n === 2) {
           target = open[0]
         } else {

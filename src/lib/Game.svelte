@@ -94,7 +94,8 @@
   const selectedCards = $derived(me.hand.filter((c) => selectedIds.includes(c.id)))
   const skipSelected = $derived(selectedCards.length === 1 && selectedCards[0].kind === 'skip')
   // A Skip has to be played on someone, like adding to a group, and a player who is already losing a
-  // turn cannot be skipped again. If everyone else is already skipped it is just discarded.
+  // turn cannot be skipped again. In normal play the player who moved just before you is always open;
+  // if a damaged saved game ever leaves nobody, the Skip can simply be discarded so the game is not stuck.
   const skipTargets = $derived(game.players.map((p, i) => i !== HUMAN && p.skipsPending === 0))
   const noSkipTarget = $derived(!skipTargets.some(Boolean))
   const canPlaySkip = $derived(myTurn && game.stage === 'play' && skipSelected && !noSkipTarget)
@@ -114,7 +115,6 @@
     if (!myTurn) return `${cur.name} is playing`
     if (game.stage === 'draw') return 'Your turn. Draw from the deck or take the top discard.'
     if (canPlaySkip) return 'Choose who loses a turn.'
-    if (skipSelected && noSkipTarget) return 'Everyone else is already losing a turn, so this Skip has no effect. Discard it to end your turn.'
     if (!me.laidDown) {
       return yousee
         ? 'Lay down any phase you have not completed when you can, then discard one card.'
