@@ -12,6 +12,7 @@
     discardLastCard,
     findPhaseLayout,
     hitTargets,
+    isSittingOut,
     meldsOf,
     nextRound,
     phaseDescription,
@@ -96,7 +97,9 @@
   // A Skip has to be played on someone, like adding to a group, and a player who is already losing a
   // turn cannot be skipped again. In normal play the player who moved just before you is always open;
   // if a damaged saved game ever leaves nobody, the Skip can simply be discarded so the game is not stuck.
-  const skipTargets = $derived(game.players.map((p, i) => i !== HUMAN && p.skipsPending === 0))
+  const skipTargets = $derived(
+    game.players.map((p, i) => i !== HUMAN && p.skipsPending === 0 && !isSittingOut(game, i)),
+  )
   const noSkipTarget = $derived(!skipTargets.some(Boolean))
   const canPlaySkip = $derived(myTurn && game.stage === 'play' && skipSelected && !noSkipTarget)
   const canDiscard = $derived(
@@ -127,14 +130,43 @@
     if (game.status === 'gameOver') {
       const names = game.winners.map((i) => game.players[i].name)
       if (game.winners.length === 1) {
-        return game.winners[0] === HUMAN ? 'You win the game' : `${names[0]} wins the game`
+        const how = game.roundResult?.tie?.how
+        const you = game.winners[0] === HUMAN
+        if (how === 'round') return you ? 'You win the tiebreaker' : `${names[0]} wins the tiebreaker`
+        if (how === 'coin') return you ? 'You win the coin toss' : `${names[0]} wins the coin toss`
+        return you ? 'You win the game' : `${names[0]} wins the game`
       }
       return `${names.join(' and ')} tie for the win`
     }
+    if (game.tieNext) return `${tiedNames} are tied`
     const winner = game.roundResult?.winner
     if (winner === null || winner === undefined) return 'Round over'
     return winner === HUMAN ? 'You went out' : `${game.players[winner].name} went out`
   })
+
+  const tiedNames = $derived(
+    (game.roundResult?.tie?.players ?? [])
+      .map((i) => (i === HUMAN ? 'You' : game.players[i].name))
+      .join(' and '),
+  )
+  const tieScore = $derived(game.players[game.roundResult?.tie?.players[0] ?? 0].score)
+  /** Explains a tie at the end of a round, if there was one. */
+  const tieNote = $derived.by(() => {
+    const tie = game.roundResult?.tie
+    if (!tie) return ''
+    const sitting = game.players.length > tie.players.length
+    if (game.tieNext) {
+      return (
+        `${tiedNames} tied on ${tieScore} points. Each of them repeats their final phase, and the first to go out wins.` +
+        (sitting ? ' Everyone else sits this one out.' : '')
+      )
+    }
+    if (tie.how === 'coin') {
+      return `${tiedNames} tied on ${tieScore} points. Only computer players were tied, so the winner was drawn at random.`
+    }
+    return ''
+  })
+  const nextLabel = $derived(game.tieNext ? 'Play tiebreaker' : 'Next round')
 
   // Computer players take their turns one action at a time so you can follow along.
   $effect(() => {
@@ -420,7 +452,7 @@
 
 <div class="table" class:has-bar={resultHidden && game.status !== 'playing'}>
   <header class="bar">
-    <h1>Round {game.round}</h1>
+    <h1>{game.tiebreak ? 'Tiebreaker' : `Round ${game.round}`}</h1>
     {#if me.laidDown && me.laidPhase !== null}
       <p class="goal"><strong>Phase {me.laidPhase + 1}</strong> {phaseDescription(me.laidPhase)}</p>
     {:else if yousee}
@@ -443,6 +475,7 @@
       >
         <div class="phead">
           <span class="pname">{p.name}</span>
+          {#if isSittingOut(game, i)}<span class="badge">Sitting out</span>{/if}
           {#if p.laidDown}<span class="badge ok">Laid down</span>{/if}
           {#if p.skipsPending > 0}
             <span class="badge warn">Loses a turn</span>
@@ -453,7 +486,7 @@
           <span>{p.hand.length} cards</span>
           <span>{p.score} points</span>
         </div>
-        {#if goalLine(p)}
+        {#if goalLine(p) && !isSittingOut(game, i)}
           <p class="pgoal">{goalLine(p)}</p>
         {/if}
         {#if canPlaySkip && skipTargets[i]}
@@ -644,13 +677,14 @@
       {#if game.status === 'gameOver'}
         <button type="button" class="primary" onclick={onExit}>New game</button>
       {:else}
-        <button type="button" class="primary" onclick={startNextRound}>Next round</button>
+        <button type="button" class="primary" onclick={startNextRound}>{nextLabel}</button>
       {/if}
     </div>
   {:else if game.status !== 'playing'}
     <div class="overlay">
       <div class="panel" role="dialog" aria-modal="true" aria-labelledby="result-title">
         <h2 id="result-title">{resultTitle}</h2>
+        {#if tieNote}<p class="tie-note">{tieNote}</p>{/if}
         <table>
           <thead>
             <tr><th scope="col">Player</th><th scope="col">This round</th><th scope="col">Total</th><th scope="col">Next</th></tr>
@@ -659,11 +693,14 @@
             {#each game.players as p, i (i)}
               <tr>
                 <th scope="row">{p.name}</th>
-                <td>{game.roundResult?.points[i] ?? 0}</td>
+                <td>{game.roundResult?.tie?.how === 'round' && game.status === 'gameOver' ? '-' : (game.roundResult?.points[i] ?? 0)}</td>
                 <td>{p.score}</td>
                 <td>
                   {#if game.status === 'gameOver'}
                     {p.phase >= PHASE_COUNT ? 'Finished' : progress(p)}
+                  {:else if game.tieNext}
+                    {@const entry = game.tieNext.find((e) => e.player === i)}
+                    {entry ? `Tiebreaker, Phase ${entry.phase + 1}` : 'Sits out'}
                   {:else if yousee}
                     {progress(p)}
                   {:else}
@@ -676,7 +713,9 @@
               </tr>
               <tr class="cards-row">
                 <td colspan="4">
-                  {#if p.hand.length === 0}
+                  {#if game.tiebreak && isSittingOut(game, i)}
+                    <span class="breakdown">Sat out the tiebreaker</span>
+                  {:else if p.hand.length === 0}
                     <span class="breakdown">Went out with no cards left</span>
                   {:else}
                     {@const left = sortHand(p.hand, 'number')}
@@ -703,7 +742,7 @@
           {#if game.status === 'gameOver'}
             <button type="button" class="primary big" bind:this={continueButton} onclick={onExit}>New game</button>
           {:else}
-            <button type="button" class="primary big" bind:this={continueButton} onclick={startNextRound}>Next round</button>
+            <button type="button" class="primary big" bind:this={continueButton} onclick={startNextRound}>{nextLabel}</button>
           {/if}
         </div>
       </div>
@@ -806,6 +845,15 @@
     border-radius: 99px;
     font-size: 0.75rem;
     font-weight: 700;
+  }
+  .tie-note {
+    margin: 0.2rem 0 0.8rem;
+    font-size: 0.95rem;
+    color: var(--gold);
+  }
+  .badge:not(.ok):not(.warn) {
+    background: rgb(255 255 255 / 0.18);
+    color: var(--text);
   }
   .badge.ok {
     background: #2a9a5a;

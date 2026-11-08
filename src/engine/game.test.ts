@@ -752,10 +752,15 @@ describe('winning the game', () => {
     expect(s.winners).toEqual([1])
   })
 
-  it('a tie on score shares the win', () => {
+  it('a tie on score with a person involved is not decided yet: the tied players repeat the final phase', () => {
     const s = finalRound([60, 50], [num(12)])
-    expect(s.status).toBe('gameOver')
-    expect(s.winners).toEqual([0, 1])
+    expect(s.status).toBe('roundOver')
+    expect(s.winners).toEqual([])
+    expect(s.tieNext).toEqual([
+      { player: 0, phase: 9 },
+      { player: 1, phase: 9 },
+    ])
+    expect(s.roundResult?.tie).toEqual({ players: [0, 1], how: 'round' })
   })
 })
 

@@ -38,6 +38,18 @@ export interface RoundResult {
   winner: number | null // index of the player who went out
   points: number[] // points added to each player's score this round
   completed: boolean[] // who completed their phase (and so advances)
+  /**
+   * Set when the game ended or paused on a tie for the lowest score. `round` means those players
+   * (or the ones who are still tied) must repeat their final phase, first out wins. `coin` means
+   * only computer players were tied, so the winner was drawn at random instead.
+   */
+  tie?: { players: number[]; how: 'round' | 'coin' }
+}
+
+/** A tied player and the final phase (0..9) they have to repeat in the tiebreaker. */
+export interface TieEntry {
+  player: number
+  phase: number
 }
 
 /** The scores at the end of one round, kept for the scoreboard. */
@@ -89,6 +101,8 @@ export interface GameState {
   events: PlayEvent[] // recent plays this round, oldest first
   scoreHistory: RoundRecord[] // one entry per finished round, oldest first
   drew: boolean[] // who has taken a draw so far this round
+  tiebreak: number[] | null // while a tiebreaker round is being played: the tied players. Everyone else sits out
+  tieNext: TieEntry[] | null // set when a round ended with a tie that a human is part of: the next round is a tiebreaker
 }
 
 export type Action =
@@ -164,6 +178,8 @@ export function createGame(
     events: [],
     scoreHistory: [],
     drew: [],
+    tiebreak: null,
+    tieNext: null,
   }
   if (mode === 'random') {
     // Each player gets their own order. It is never shown, only the phase they are on.
@@ -194,18 +210,42 @@ export function targetPhase(state: Pick<GameState, 'mode'>, player: Player): num
 export function nextRound(state: GameState): GameState {
   if (state.status !== 'roundOver') return state
   const s = structuredClone(state)
+  if (s.tieNext && s.tieNext.length > 1) {
+    // A tiebreaker repeats the final phase of each tied player. It is not a numbered round.
+    const entries = s.tieNext
+    for (const { player, phase } of entries) {
+      const p = s.players[player]
+      p.done[phase] = false
+      p.phase = PHASE_COUNT - 1
+      // The one phase left is their last in their own order, which is the one they just finished.
+      const at = p.order.indexOf(phase)
+      if (at >= 0 && at !== PHASE_COUNT - 1) {
+        p.order.splice(at, 1)
+        p.order.push(phase)
+      }
+    }
+    dealRound(s, entries.map((e) => e.player))
+    return s
+  }
   s.round += 1
   dealRound(s)
   return s
 }
 
-function dealRound(state: GameState): void {
+/** True for a player who is not part of the tiebreaker round that is being played. */
+export function isSittingOut(state: Pick<GameState, 'tiebreak'>, index: number): boolean {
+  return state.tiebreak !== null && state.tiebreak !== undefined && !state.tiebreak.includes(index)
+}
+
+function dealRound(state: GameState, participants: number[] | null = null): void {
   const shuffled = shuffleWithSeed(buildDeck(), state.rngSeed)
   state.rngSeed = shuffled.seed
   const deck = shuffled.items
 
-  for (const p of state.players) {
-    p.hand = deck.splice(0, HAND_SIZE)
+  state.tiebreak = participants
+  state.tieNext = null
+  for (const [i, p] of state.players.entries()) {
+    p.hand = isSittingOut(state, i) ? [] : deck.splice(0, HAND_SIZE)
     p.laidDown = false
     p.laidPhase = null
     p.skipsPending = 0
@@ -220,8 +260,18 @@ function dealRound(state: GameState): void {
   state.roundResult = null
   state.status = 'playing'
 
-  addLog(state, `Round ${state.round} begins`)
-  const first = (state.round - 1) % state.players.length
+  const n = state.players.length
+  let first: number
+  if (participants) {
+    addLog(state, 'The tiebreaker begins')
+    // Start from where the next round would have started, with the first tied player at or after that seat.
+    const from = state.round % n
+    first = participants.map((i) => (i - from + n) % n).reduce((a, b) => Math.min(a, b))
+    first = (first + from) % n
+  } else {
+    addLog(state, `Round ${state.round} begins`)
+    first = (state.round - 1) % n
+  }
   if (starter.kind === 'skip') state.players[first].skipsPending = 1
   beginTurn(state, first)
 }
@@ -231,7 +281,13 @@ function beginTurn(state: GameState, index: number): void {
   const n = state.players.length
   let i = index
   state.turnCount += 1
-  for (let guard = 0; guard < n && state.players[i].skipsPending > 0; guard++) {
+  for (let guard = 0; guard < 2 * n; guard++) {
+    if (isSittingOut(state, i)) {
+      i = (i + 1) % n
+      state.turnCount += 1
+      continue
+    }
+    if (state.players[i].skipsPending <= 0) break
     state.players[i].skipsPending -= 1
     addLog(state, `${state.players[i].name} is skipped`)
     addEvent(state, { player: i, kind: 'skipped' })
@@ -254,7 +310,28 @@ function ensureDrawPile(state: GameState): boolean {
   return true
 }
 
+function endTiebreak(state: GameState, winner: number | null): void {
+  const tied = state.tiebreak ?? []
+  const first = winner !== null && tied.includes(winner) ? winner : tied[0]
+  const points = state.players.map(() => 0)
+  const completed = state.players.map((p) => p.laidDown)
+  for (const i of tied) {
+    // Everyone in the tiebreaker had finished all ten phases, so they stay finished.
+    const p = state.players[i]
+    p.done = p.done.map(() => true)
+    p.phase = PHASE_COUNT
+  }
+  state.roundResult = { winner, points, completed, tie: { players: tied.slice(), how: 'round' } }
+  state.winners = [first]
+  state.status = 'gameOver'
+  addLog(state, `${state.players[first].name} won the tiebreaker`)
+}
+
 function endRound(state: GameState, winner: number | null): void {
+  if (state.tiebreak) {
+    endTiebreak(state, winner)
+    return
+  }
   const points = state.players.map((p, i) => (i === winner ? 0 : handPoints(p.hand)))
   const completed = state.players.map((p) => p.laidDown)
   state.players.forEach((p, i) => {
@@ -284,8 +361,29 @@ function endRound(state: GameState, winner: number | null): void {
 
   if (finishers.length > 0) {
     const lowest = Math.min(...finishers.map((i) => state.players[i].score))
-    state.winners = finishers.filter((i) => state.players[i].score === lowest)
-    state.status = 'gameOver'
+    const tied = finishers.filter((i) => state.players[i].score === lowest)
+    if (tied.length > 1 && tied.some((i) => !state.players[i].isBot)) {
+      // The tied players repeat their final phase, and the first one out wins.
+      state.tieNext = tied.map((i) => {
+        const p = state.players[i]
+        return { player: i, phase: p.laidPhase ?? p.order[PHASE_COUNT - 1] }
+      })
+      state.winners = []
+      state.status = 'roundOver'
+      state.roundResult.tie = { players: tied, how: 'round' }
+      addLog(state, `${tied.map((i) => state.players[i].name).join(' and ')} are tied`)
+    } else if (tied.length > 1) {
+      // Only computer players are tied, and nobody wants to watch that. Draw the winner at random.
+      const shuffled = shuffleWithSeed(tied, state.rngSeed)
+      state.rngSeed = shuffled.seed
+      state.winners = [shuffled.items[0]]
+      state.roundResult.tie = { players: tied, how: 'coin' }
+      state.status = 'gameOver'
+      addLog(state, `${state.players[state.winners[0]].name} won the tie on a coin toss`)
+    } else {
+      state.winners = tied
+      state.status = 'gameOver'
+    }
   } else {
     state.status = 'roundOver'
   }
@@ -399,15 +497,16 @@ export function applyAction(state: GameState, action: Action): ActionResult {
       let target: number | null = null
       if (card.kind === 'skip') {
         // A player who is already losing a turn cannot be skipped again: Skips do not stack.
-        const open = s.players.map((_, i) => i).filter((i) => i !== s.current && s.players[i].skipsPending === 0)
+        const seated = s.players.map((_, i) => i).filter((i) => !isSittingOut(s, i))
+        const open = seated.filter((i) => i !== s.current && s.players[i].skipsPending === 0)
         if (open.length === 0) {
           // Cannot happen in normal play (whoever moved just before is never skipped), but a damaged
           // saved game should not leave the player stuck holding a Skip, so it is just discarded.
-        } else if (n === 2) {
+        } else if (seated.length === 2) {
           target = open[0]
         } else {
           const t = action.skipTarget
-          if (t === undefined || t === s.current || !s.players[t]) {
+          if (t === undefined || t === s.current || !s.players[t] || isSittingOut(s, t)) {
             return fail('Choose which player to skip')
           }
           if (s.players[t].skipsPending > 0) return fail('That player is already losing a turn')
@@ -447,7 +546,7 @@ export function discardLastCard(state: GameState, who: number): GameState {
   if (!player || !player.laidDown || player.hand.length !== 1) return state
   const card = player.hand[0]
   // A Skip needs a target even though the round is about to end; any player who is not already skipped will do.
-  const target = state.players.findIndex((p, i) => i !== who && p.skipsPending === 0)
+  const target = state.players.findIndex((p, i) => i !== who && !isSittingOut(state, i) && p.skipsPending === 0)
   const result = applyAction(state, {
     type: 'discard',
     cardId: card.id,
@@ -465,6 +564,8 @@ export function upgradeSavedState(state: GameState): GameState {
   // A round that was already under way cannot say who has drawn, so nobody counts as shut out.
   state.drew ??= state.players.map(() => true)
   state.mode ??= 'classic'
+  state.tiebreak ??= null
+  state.tieNext ??= null
   for (const p of state.players) {
     p.order ??= Array.from({ length: PHASE_COUNT }, (_, i) => i)
     p.done ??= Array.from({ length: PHASE_COUNT }, (_, i) => i < p.phase)

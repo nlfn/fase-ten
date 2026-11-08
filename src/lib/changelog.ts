@@ -13,6 +13,12 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 16,
+    date: '2026-11-08',
+    title: 'Tiebreaker round',
+    body: 'If you are tied for the lowest score after the final phase, the tied players now repeat their final phase and the first one out wins, as in the official rules. Anyone else sits that round out. If only computer players are tied, the winner is simply drawn at random.',
+  },
+  {
     id: 15,
     date: '2026-11-08',
     title: 'Scores and Phases in one place',
