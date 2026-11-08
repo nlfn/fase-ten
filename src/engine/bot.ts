@@ -217,26 +217,37 @@ export function createBot(level: BotLevel = 'expert', random: () => number = Mat
   }
 
   function chooseSkipTarget(state: GameState): number {
-    let best = -1
+    let tied: number[] = []
     let bestScore = -Infinity
+    let bestPoints = Infinity
     state.players.forEach((p, i) => {
       if (i === state.current) return
       // Someone who has laid down and is nearly out is the one to stop. This outweighs everything else,
       // even a pending Skip, since a second Skip costs them another turn.
       const nearOut = p.laidDown && p.hand.length <= 2
       const closing = p.laidDown && p.hand.length <= 4
+      // Anyone closing in on the end of the game is the one to stop, at every level: a player on their
+      // last phase can finish the whole game, and one a phase or two behind that is about to be.
+      const remaining = PHASE_COUNT - p.phase
+      const endgame = remaining <= 1 ? 400 : remaining === 2 ? 350 : remaining === 3 ? 60 : 0
       const score =
         (p.laidDown ? 50 : 0) +
         p.phase * 3 +
         (11 - p.hand.length) +
-        (defense ? (nearOut ? 300 : closing ? 40 : 0) : 0) -
+        (defense ? (nearOut ? 300 : closing ? 40 : 0) : 0) +
+        endgame -
         (p.skipsPending > 0 ? 100 : 0)
-      if (score > bestScore) {
+      // Equal targets: the lowest total score is the likeliest winner, so stop that one. If score cannot
+      // separate them either, pick at random so no seat (the human in seat one) is the default victim.
+      if (score > bestScore || (score === bestScore && p.score < bestPoints)) {
         bestScore = score
-        best = i
+        bestPoints = p.score
+        tied = [i]
+      } else if (score === bestScore && p.score === bestPoints) {
+        tied.push(i)
       }
     })
-    return best
+    return tied.length === 1 ? tied[0] : tied[Math.floor(random() * tied.length)]
   }
 
   function chooseDiscard(state: GameState): Action {

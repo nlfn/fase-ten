@@ -79,6 +79,8 @@ Hitting looks ahead (`hitPlan.ts`, Easy and Expert; Medium hits greedily): after
 
 Defense (Easy and Expert, apart from Easy's deliberate mistakes; Medium does not do this): an opponent who has laid down can add cards to any group on the table, so a discard that fits a group is a gift. If a laid-down opponent has two cards or fewer, a bot will not discard a card the table can use unless every card it holds is usable, and it aims its Skips at that player first, even if they already have one waiting. With bigger opponent hands, usable cards are only a light tie-break.
 
+Skip targeting (every level): a player on their last phase is the first choice, since they can end the whole game, then a player on their second to last phase, with a smaller nudge for the one before that. When two opponents are equally dangerous the Skip goes to the lowest total score, and if that is tied too, to a random one.
+
 Memory is used when choosing a discard. If two discards are otherwise equal, a bot keeps back a card an opponent has been picking up (the same number for a set, a neighbor for a run) and prefers to throw a number that opponent has thrown away. See `recall` and `discardDanger` in `bot.ts`. Saved games and settings from before the rename that say "normal" are read as expert.
 
 In 500 test games per pairing (all four game styles, both seating orders), Expert beat Medium 74% to 26%, Medium beat Easy 70% to 30%, and Expert beat Easy 86% to 14%. The levels are set in the `RULES` table at the top of `bot.ts`. Games last about 11 rounds.

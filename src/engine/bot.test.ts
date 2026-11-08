@@ -434,4 +434,46 @@ describe('defense against an opponent who is nearly out', () => {
     s.players[0].skipsPending = 1
     expect(createBot('expert').chooseAction(s)).toMatchObject({ type: 'discard', skipTarget: 0 })
   })
+  it('breaks a tie between equal Skip targets by aiming at the lowest score', () => {
+    for (const lowest of [0, 2]) {
+      const s = craftedGame([...nums(5, 5, 5, 7, 7, 4), skip()], { player: 1, setups: THREE_PLAYERS })
+      s.players[0].score = lowest === 0 ? 40 : 90
+      s.players[2].score = lowest === 2 ? 40 : 90
+      for (const level of ['expert', 'medium'] as const) {
+        const a = createBot(level, () => 0.99).chooseAction(s)
+        expect(a).toMatchObject({ type: 'discard', skipTarget: lowest })
+      }
+    }
+  })
+
+  it('stops a player on their final phase before a nearly out opponent, at every level', () => {
+    const s = craftedGame([...nums(5, 5, 5, 7, 7, 4), skip()], { player: 1, setups: THREE_PLAYERS })
+    s.players[0].laidDown = true
+    s.players[0].hand = nums(1)
+    s.players[2].phase = 9
+    s.players[2].hand = nums(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+    for (const level of ['expert', 'medium', 'easy'] as const) {
+      expect(createBot(level, () => 0.99).chooseAction(s)).toMatchObject({ type: 'discard', skipTarget: 2 })
+    }
+  })
+
+  it('warns early: a player with 8 phases done outranks one with 5 and a laid down hand', () => {
+    const s = craftedGame([...nums(5, 5, 5, 7, 7, 4), skip()], { player: 1, setups: THREE_PLAYERS })
+    s.players[0].phase = 5
+    s.players[0].laidDown = true
+    s.players[0].hand = nums(1, 2, 3, 4, 5)
+    s.players[2].phase = 8
+    s.players[2].hand = nums(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+    expect(createBot('medium', () => 0.99).chooseAction(s)).toMatchObject({ skipTarget: 2 })
+  })
+
+  it('picks at random when score and standing cannot separate the targets', () => {
+    const s = craftedGame([...nums(5, 5, 5, 7, 7, 4), skip()], { player: 1, setups: THREE_PLAYERS })
+    const picks = new Set<number>()
+    for (const r of [0.1, 0.9]) {
+      const a = createBot('expert', () => r).chooseAction(s)
+      if (a.type === 'discard') picks.add(a.skipTarget as number)
+    }
+    expect([...picks].sort()).toEqual([0, 2])
+  })
 })
