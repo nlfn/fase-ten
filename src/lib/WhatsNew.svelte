@@ -2,6 +2,13 @@
   import { CHANGELOG, LATEST_CHANGE_ID } from './changelog'
   import { SEEN_KEY, groupByDate, unseenEntries } from './whatsNew'
 
+  interface Props {
+    /** Set to true to list every change, not just the ones not seen yet. */
+    showAll?: boolean
+  }
+
+  let { showAll = $bindable(false) }: Props = $props()
+
   function read(key: string): string | null {
     try {
       return localStorage.getItem(key)
@@ -12,10 +19,11 @@
 
   // Someone who has played here before has a saved game or saved settings.
   const hasSavedData = read('fase-ten:session:v1') !== null || read('fase-ten:settings:v1') !== null
-  const entries = unseenEntries(CHANGELOG, read(SEEN_KEY), hasSavedData)
-  const groups = groupByDate(entries)
+  const unseen = unseenEntries(CHANGELOG, read(SEEN_KEY), hasSavedData)
 
-  let open = $state(entries.length > 0)
+  let autoOpen = $state(unseen.length > 0)
+  const open = $derived(showAll || autoOpen)
+  const groups = $derived(groupByDate(showAll ? CHANGELOG : unseen))
 
   function remember() {
     try {
@@ -26,11 +34,12 @@
   }
 
   // A brand new player has nothing to catch up on, so start counting from the current version.
-  if (entries.length === 0) remember()
+  if (unseen.length === 0) remember()
 
   function close() {
     remember()
-    open = false
+    autoOpen = false
+    showAll = false
   }
 
   let closeButton = $state<HTMLButtonElement>()
@@ -47,13 +56,13 @@
 
 {#if open}
   <div class="modal-backdrop" role="presentation" onclick={(e) => e.target === e.currentTarget && close()}>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="whats-new-title">
+    <div class="modal wn" role="dialog" aria-modal="true" aria-labelledby="whats-new-title">
       <div class="head">
         <h2 id="whats-new-title">What's new</h2>
-        <button type="button" class="x" aria-label="Close" onclick={close}>&times;</button>
+        <button type="button" class="x" aria-label="Close" bind:this={closeButton} onclick={close}>&times;</button>
       </div>
-      <p>Here is what changed since the last version you opened.</p>
-      <div class="list">
+      <div class="body">
+        <p>{showAll ? 'Everything that has changed so far.' : 'Here is what changed since the last version you opened.'}</p>
         {#each groups as group (group.date)}
           <h3>{group.date}</h3>
           {#each group.items as entry (entry.id)}
@@ -64,31 +73,37 @@
           {/each}
         {/each}
       </div>
-      <button type="button" class="primary done" bind:this={closeButton} onclick={close}>Got it</button>
     </div>
   </div>
 {/if}
 
 <style>
+  /* The heading and its x stay put while the list scrolls under them. */
+  .wn {
+    padding: 0;
+    gap: 0;
+  }
   .head {
+    position: sticky;
+    top: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 0.6rem;
+    padding: 1rem 1.2rem 0.6rem;
+    background: var(--felt);
+    z-index: 1;
+  }
+  .body {
+    display: grid;
+    gap: 0.4rem;
+    padding: 0 1.2rem 1.2rem;
   }
   .x {
     padding: 0.3rem 0.65rem;
     font-size: 1.4rem;
     line-height: 1;
     background: transparent;
-  }
-  .done {
-    position: sticky;
-    bottom: 0;
-  }
-  .list {
-    display: grid;
-    gap: 0.4rem;
   }
   h3 {
     margin: 0.5rem 0 0;
