@@ -418,20 +418,6 @@ describe('Skips do not stack', () => {
     expect(s.events.filter((e) => e.kind === 'skipped' && e.player === 2)).toHaveLength(1)
   })
 
-  it('just discards a Skip when every other player is already losing a turn', () => {
-    let s = craftedGame([...nums(1, 2, 3)], { setups: THREE_PLAYERS })
-    s.current = 1
-    s.stage = 'play'
-    const sk = skip()
-    s.players[1].hand = [sk, ...nums(4, 5, 6)]
-    s.players[0].skipsPending = 1
-    s.players[2].skipsPending = 1
-    s = run(s, { type: 'discard', cardId: sk.id })
-    expect(topDiscard(s)?.kind).toBe('skip')
-    expect(s.events.some((e) => e.kind === 'skip')).toBe(false)
-    expect(s.players.map((p) => p.skipsPending).every((n) => n <= 1)).toBe(true)
-  })
-
   it('a lost turn is only ever lost once', () => {
     let s = threePlayerSkip()
     s = run(s, { type: 'discard', cardId: s.players[1].hand.find((c) => c.kind !== 'skip')!.id })

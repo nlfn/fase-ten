@@ -22,7 +22,7 @@ export const CHANGELOG: ChangeEntry[] = [
     id: 13,
     date: '2026-11-07',
     title: 'Skips no longer stack',
-    body: 'Following the official rules, a player who is already losing a turn cannot be skipped again. You can only play a Skip on someone else, and if everyone else is already skipped it is just discarded.',
+    body: 'Following the official rules, a player who is already losing a turn cannot be skipped again. You can only play a Skip on someone who is not already skipped.',
   },
   {
     id: 12,

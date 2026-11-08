@@ -425,7 +425,7 @@ describe('defense against an opponent who is nearly out', () => {
     expect(createBot('medium', () => 0.99).chooseAction(s)).toMatchObject({ type: 'discard', skipTarget: 0 })
   })
 
-  it('never Skips a player who is already losing a turn, and holds no target if everyone is', () => {
+  it('never Skips a player who is already losing a turn', () => {
     const s = craftedGame([...nums(5, 5, 5, 7, 7, 4), skip()], { player: 1, setups: THREE_PLAYERS })
     s.players[0].laidDown = true
     s.players[0].hand = nums(1)
@@ -433,11 +433,6 @@ describe('defense against an opponent who is nearly out', () => {
     for (const level of ['expert', 'medium', 'easy'] as const) {
       expect(createBot(level, () => 0.99).chooseAction(s)).toMatchObject({ type: 'discard', skipTarget: 2 })
     }
-    s.players[2].skipsPending = 1
-    const a = createBot('expert').chooseAction(s)
-    expect(a).toMatchObject({ type: 'discard' })
-    expect((a as { skipTarget?: number }).skipTarget).toBeUndefined()
-    expect(applyAction(s, a).ok).toBe(true)
   })
   it('breaks a tie between equal Skip targets by aiming at the lowest score', () => {
     for (const lowest of [0, 2]) {

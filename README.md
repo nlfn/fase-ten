@@ -43,7 +43,7 @@ The engine is the important part. Everything a player does is an action (`drawDe
 - A turn is draw (deck, or the top discard unless it is a Skip), optionally lay down and hit, then discard.
 - After laying down you can add cards to any group on the table, yours or an opponent's, including on the same turn you laid down.
 - Going out can happen by hitting or discarding your last card.
-- A discarded Skip makes the chosen player lose their next turn. Skips do not stack: a player who is already losing a turn cannot be skipped again, and if every other player is already skipped the Skip is just discarded. If the first card turned up is a Skip, the first player loses their turn.
+- A discarded Skip makes the chosen player lose their next turn. Skips do not stack: a player who is already losing a turn cannot be skipped again. If the first card turned up is a Skip, the first player loses their turn.
 - Cards left in hand: 1 to 9 are 5 points, 10 to 12 are 10, Skip is 15, Wild is 25. The player who goes out scores 0.
 - You advance only if you laid down your phase. Finish Phase 10 to end the game; if several players finish in the same round, the lowest score wins.
 
