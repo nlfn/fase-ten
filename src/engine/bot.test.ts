@@ -249,7 +249,7 @@ describe('memory', () => {
     const s = craftedGame(hand())
     s.events = [pickup(12, 900)]
     for (const level of ['medium', 'expert'] as const) {
-      const card = discarded(createBot(level).chooseAction(s), s)
+      const card = discarded(createBot(level, () => 0.99).chooseAction(s), s)
       expect(card).toMatchObject({ kind: 'number' })
       expect(card && card.kind === 'number' && card.value).not.toBe(12)
     }
@@ -266,7 +266,7 @@ describe('memory', () => {
   it('medium forgets an older pickup, expert does not', () => {
     const s = craftedGame(hand())
     s.events = [pickup(12, 900), pickup(3, 901)]
-    const medium = discarded(createBot('medium').chooseAction(s), s)
+    const medium = discarded(createBot('medium', () => 0.99).chooseAction(s), s)
     const expert = discarded(createBot('expert').chooseAction(s), s)
     expect(medium).toMatchObject({ kind: 'number', value: 12 })
     expect(expert && expert.kind === 'number' && expert.value).not.toBe(12)
@@ -327,6 +327,16 @@ describe('bridging a run with Wilds', () => {
     expect(state.melds.find((m) => m.id === 90)).toMatchObject({ start: 2, end: 12 })
   })
 
+  it('Medium hits greedily and sends the Wilds to the set, stranding the 3 and 2', () => {
+    const s = craftedGame([wild(), wild(), ...nums(3, 2)], { setups: THREE_PLAYERS })
+    s.players[0].laidDown = true
+    s.players[0].laidPhase = 3
+    s.melds.push({ id: 90, owner: 0, kind: 'run', start: 6, end: 12, cards: nums(6, 7, 8, 9, 10, 11, 12) })
+    s.melds.push({ id: 91, owner: 1, kind: 'set', value: 10, cards: nums(10, 10, 10) })
+    const a = createBot('medium', () => 0.99).chooseAction(s)
+    expect(a).toMatchObject({ type: 'hit', meldId: 91 })
+  })
+
   it('still puts spare Wilds on a set when there is nothing to bridge to', () => {
     const s = craftedGame([wild(), ...nums(1)], { setups: THREE_PLAYERS })
     s.players[0].laidDown = true
@@ -385,7 +395,7 @@ describe('defense against an opponent who is nearly out', () => {
   })
 
   it('keeps the 12 when a laid-down opponent has one or two cards left', () => {
-    for (const level of ['easy', 'medium', 'expert'] as const) {
+    for (const level of ['easy', 'expert'] as const) {
       for (const cards of [1, 2]) {
         const card = thrown(setup(cards), level)
         expect(card).toBeDefined()
@@ -393,6 +403,12 @@ describe('defense against an opponent who is nearly out', () => {
         // It still throws the card that costs its own phase the least.
         expect(card).toMatchObject({ value: 4 })
       }
+    }
+  })
+
+  it('Medium does not watch the table: it still throws the 12 to a nearly-out opponent', () => {
+    for (const cards of [1, 2]) {
+      expect(thrown(setup(cards), 'medium')).toMatchObject({ value: 12 })
     }
   })
 
@@ -412,6 +428,8 @@ describe('defense against an opponent who is nearly out', () => {
     s.players[2].hand = nums(1, 2, 3, 4, 5, 6, 7, 8)
     const a = createBot('expert').chooseAction(s)
     expect(a).toMatchObject({ type: 'discard', skipTarget: 0 })
+    // Medium only uses the simple formula, so it goes for the stronger looking opponent instead.
+    expect(createBot('medium', () => 0.99).chooseAction(s)).toMatchObject({ type: 'discard', skipTarget: 2 })
     // Even when that player already has a Skip waiting, a second one still goes to them.
     s.players[0].skipsPending = 1
     expect(createBot('expert').chooseAction(s)).toMatchObject({ type: 'discard', skipTarget: 0 })

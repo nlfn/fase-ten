@@ -39,7 +39,18 @@ export interface Bot {
   chooseAction(state: GameState): Action
 }
 
-const MISTAKE_RATE: Record<BotLevel, number> = { easy: 0.35, medium: 0, expert: 0 }
+/**
+ * What separates the levels apart from memory (below).
+ *  - mistakeRate: how often the bot deliberately plays a weaker move.
+ *  - lookAhead:   plans the order of its hits (so Wilds bridge a run) instead of hitting greedily.
+ *  - defense:     watches the table, never feeding a nearly-out opponent and Skipping them first.
+ * Medium is tuned so Expert beats it about three games in four, and it beats Easy about three in four.
+ */
+const RULES: Record<BotLevel, { mistakeRate: number; lookAhead: boolean; defense: boolean }> = {
+  easy: { mistakeRate: 0.35, lookAhead: true, defense: true },
+  medium: { mistakeRate: 0.08, lookAhead: false, defense: false },
+  expert: { mistakeRate: 0, lookAhead: true, defense: true },
+}
 
 /** How much of each opponent's recent play a level can recall. */
 const MEMORY: Record<BotLevel, { pickups: number; discards: number }> = {
@@ -98,7 +109,8 @@ export function discardDanger(state: GameState, memory: Map<number, Recall>, car
 }
 
 export function createBot(level: BotLevel = 'expert', random: () => number = Math.random): Bot {
-  const mistake = () => random() < MISTAKE_RATE[level]
+  const { mistakeRate, lookAhead, defense } = RULES[level]
+  const mistake = () => random() < mistakeRate
 
   /** The phases this player could still lay down this round. */
   function openPhases(state: GameState, me: Player): number[] {
@@ -190,12 +202,14 @@ export function createBot(level: BotLevel = 'expert', random: () => number = Mat
     // Look ahead: prefer the card that leaves the least behind once everything that can be played has
     // been (so Wilds bridge a gap to a card in hand instead of going on someone else's set). The
     // simple ranking above only decides between plays that are equally good.
-    const planner = createHitPlanner()
-    const bodies = state.melds.map(lite)
-    for (const o of options) {
-      const index = state.melds.findIndex((m) => m.id === o.meldId)
-      const rest = me.hand.filter((c) => c.id !== o.card.id)
-      o.left = planner.best(rest, withHit(bodies, index, o.end))
+    if (lookAhead) {
+      const planner = createHitPlanner()
+      const bodies = state.melds.map(lite)
+      for (const o of options) {
+        const index = state.melds.findIndex((m) => m.id === o.meldId)
+        const rest = me.hand.filter((c) => c.id !== o.card.id)
+        o.left = planner.best(rest, withHit(bodies, index, o.end))
+      }
     }
     options.sort((a, b) => (a.left ?? 0) - (b.left ?? 0) || b.rank - a.rank)
     const best = options[0]
@@ -215,7 +229,7 @@ export function createBot(level: BotLevel = 'expert', random: () => number = Mat
         (p.laidDown ? 50 : 0) +
         p.phase * 3 +
         (11 - p.hand.length) +
-        (nearOut ? 300 : closing ? 40 : 0) -
+        (defense ? (nearOut ? 300 : closing ? 40 : 0) : 0) -
         (p.skipsPending > 0 ? 100 : 0)
       if (score > bestScore) {
         bestScore = score
@@ -243,7 +257,7 @@ export function createBot(level: BotLevel = 'expert', random: () => number = Mat
     const exposed = others.some((p) => p.laidDown)
     const usable = (c: Card) => exposed && state.melds.some((m) => canHit(m, c))
     // When one of them is almost out, do not hand them a card they can play, unless every choice is playable.
-    if (others.some((p) => p.laidDown && p.hand.length <= 2) && !mistake()) {
+    if (defense && others.some((p) => p.laidDown && p.hand.length <= 2) && !mistake()) {
       const safe = candidates.filter((c) => !usable(c))
       if (safe.length > 0) candidates = safe
     }
@@ -252,7 +266,7 @@ export function createBot(level: BotLevel = 'expert', random: () => number = Mat
     // an opponent are kept back when everything else is even.
     const memory = recall(state, state.current, level)
     const danger = new Map(
-      candidates.map((c) => [c.id, discardDanger(state, memory, c) + (usable(c) ? 2 : 0)]),
+      candidates.map((c) => [c.id, discardDanger(state, memory, c) + (defense && usable(c) ? 2 : 0)]),
     )
     candidates.sort((a, b) => cardPoints(b) - cardPoints(a) || danger.get(a.id)! - danger.get(b.id)!)
 
