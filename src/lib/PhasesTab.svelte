@@ -38,7 +38,7 @@
         ? 'Backwards: players work backwards, from Phase 10 down to Phase 1.'
         : 'Players work through the phases in order.'}
 </p>
-<div class="scroll">
+<div>
   <table>
     <thead>
       <tr>
@@ -89,9 +89,6 @@
 </p>
 
 <style>
-  .scroll {
-    overflow-x: auto;
-  }
   table {
     width: 100%;
     border-collapse: collapse;
@@ -103,7 +100,15 @@
     border-bottom: 1px solid rgb(255 255 255 / 0.15);
     text-align: center;
   }
+  /* The player names stay at the top of the sheet while the rows scroll under them. The line under
+     them is a shadow because a collapsed table border does not travel with a sticky cell. */
   thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--felt);
+    box-shadow: inset 0 -1px 0 rgb(255 255 255 / 0.15);
+    border-bottom: 0;
     font-size: 0.8rem;
     color: var(--text-dim);
     font-weight: 700;
