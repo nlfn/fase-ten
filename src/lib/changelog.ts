@@ -13,6 +13,12 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 14,
+    date: '2026-11-08',
+    title: 'Medium watches the table',
+    body: 'Medium now avoids discarding a card an almost-finished opponent can play, like Easy and Expert. To keep it a step below Expert, it makes a few more mistakes.',
+  },
+  {
     id: 13,
     date: '2026-11-07',
     title: 'Skips no longer stack',

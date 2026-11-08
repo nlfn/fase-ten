@@ -395,7 +395,7 @@ describe('defense against an opponent who is nearly out', () => {
   })
 
   it('keeps the 12 when a laid-down opponent has one or two cards left', () => {
-    for (const level of ['easy', 'expert'] as const) {
+    for (const level of ['easy', 'medium', 'expert'] as const) {
       for (const cards of [1, 2]) {
         const card = thrown(setup(cards), level)
         expect(card).toBeDefined()
@@ -403,12 +403,6 @@ describe('defense against an opponent who is nearly out', () => {
         // It still throws the card that costs its own phase the least.
         expect(card).toMatchObject({ value: 4 })
       }
-    }
-  })
-
-  it('Medium does not watch the table: it still throws the 12 to a nearly-out opponent', () => {
-    for (const cards of [1, 2]) {
-      expect(thrown(setup(cards), 'medium')).toMatchObject({ value: 12 })
     }
   })
 
@@ -428,8 +422,7 @@ describe('defense against an opponent who is nearly out', () => {
     s.players[2].hand = nums(1, 2, 3, 4, 5, 6, 7, 8)
     const a = createBot('expert').chooseAction(s)
     expect(a).toMatchObject({ type: 'discard', skipTarget: 0 })
-    // Medium only uses the simple formula, so it goes for the stronger looking opponent instead.
-    expect(createBot('medium', () => 0.99).chooseAction(s)).toMatchObject({ type: 'discard', skipTarget: 2 })
+    expect(createBot('medium', () => 0.99).chooseAction(s)).toMatchObject({ type: 'discard', skipTarget: 0 })
   })
 
   it('never Skips a player who is already losing a turn, and holds no target if everyone is', () => {
