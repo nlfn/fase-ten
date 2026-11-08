@@ -72,16 +72,16 @@ All levels follow the same plan: take a discard only if it brings the hand close
 The levels differ in mistakes and memory:
 
 - **Easy** makes deliberate mistakes about a third of the time and remembers nothing about the other players.
-- **Medium** plays cleanly but only remembers each opponent's last pickup and last two discards.
+- **Medium** makes the odd mistake (8% of the time), adds cards to the table one at a time without planning ahead, does not watch for a nearly-out opponent (see below), and only remembers each opponent's last pickup and last two discards.
 - **Expert** plays cleanly and remembers every pickup and discard this round.
 
-Hitting looks ahead (`hitPlan.ts`): after laying down, a bot searches the order in which it can add its cards to the table and plays the card that leaves the least behind. This matters most for Wilds, which have to bridge a gap on a run (a Wild as the 5 and another as the 4 so a 3 and a 2 can follow) instead of going on someone else's set. The "auto lay down" button uses the same logic, so it plays out your whole hand the best way it can find.
+Hitting looks ahead (`hitPlan.ts`, Easy and Expert; Medium hits greedily): after laying down, a bot searches the order in which it can add its cards to the table and plays the card that leaves the least behind. This matters most for Wilds, which have to bridge a gap on a run (a Wild as the 5 and another as the 4 so a 3 and a 2 can follow) instead of going on someone else's set. The "auto lay down" button uses the same logic, so it plays out your whole hand the best way it can find.
 
-Defense (all levels except Easy's deliberate mistakes): an opponent who has laid down can add cards to any group on the table, so a discard that fits a group is a gift. If a laid-down opponent has two cards or fewer, a bot will not discard a card the table can use unless every card it holds is usable, and it aims its Skips at that player first, even if they already have one waiting. With bigger opponent hands, usable cards are only a light tie-break.
+Defense (Easy and Expert, apart from Easy's deliberate mistakes; Medium does not do this): an opponent who has laid down can add cards to any group on the table, so a discard that fits a group is a gift. If a laid-down opponent has two cards or fewer, a bot will not discard a card the table can use unless every card it holds is usable, and it aims its Skips at that player first, even if they already have one waiting. With bigger opponent hands, usable cards are only a light tie-break.
 
 Memory is used when choosing a discard. If two discards are otherwise equal, a bot keeps back a card an opponent has been picking up (the same number for a set, a neighbor for a run) and prefers to throw a number that opponent has thrown away. See `recall` and `discardDanger` in `bot.ts`. Saved games and settings from before the rename that say "normal" are read as expert.
 
-In 300 test games each (both seating orders), expert beat easy 269 to 29, medium beat easy 266 to 32, and expert and medium were level, 146 to 150. So memory changes how the bots play more than it changes who wins. Games last about 11 rounds.
+In 500 test games per pairing (all four game styles, both seating orders), Expert beat Medium 74% to 26%, Medium beat Easy 70% to 30%, and Expert beat Easy 86% to 14%. The levels are set in the `RULES` table at the top of `bot.ts`. Games last about 11 rounds.
 
 To add a smarter player, implement the `Bot` interface in `bot.ts` (`chooseAction(state) => Action`). Ideas: hold a Skip until an opponent is close to going out, estimate how likely a phase is to complete.
 
