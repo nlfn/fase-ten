@@ -446,14 +446,34 @@ describe('defense against an opponent who is nearly out', () => {
     }
   })
 
-  it('aims a Skip at a player on their final phase before a nearly out opponent (Expert)', () => {
+  it('stops a player on their final phase before a nearly out opponent, at every level', () => {
     const s = craftedGame([...nums(5, 5, 5, 7, 7, 4), skip()], { player: 1, setups: THREE_PLAYERS })
     s.players[0].laidDown = true
     s.players[0].hand = nums(1)
     s.players[2].phase = 9
     s.players[2].hand = nums(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
-    expect(createBot('expert').chooseAction(s)).toMatchObject({ type: 'discard', skipTarget: 2 })
-    // Medium has no defense, so it still goes for the laid down player.
-    expect(createBot('medium', () => 0.99).chooseAction(s)).toMatchObject({ type: 'discard', skipTarget: 0 })
+    for (const level of ['expert', 'medium', 'easy'] as const) {
+      expect(createBot(level, () => 0.99).chooseAction(s)).toMatchObject({ type: 'discard', skipTarget: 2 })
+    }
+  })
+
+  it('warns early: a player with 8 phases done outranks one with 5 and a laid down hand', () => {
+    const s = craftedGame([...nums(5, 5, 5, 7, 7, 4), skip()], { player: 1, setups: THREE_PLAYERS })
+    s.players[0].phase = 5
+    s.players[0].laidDown = true
+    s.players[0].hand = nums(1, 2, 3, 4, 5)
+    s.players[2].phase = 8
+    s.players[2].hand = nums(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+    expect(createBot('medium', () => 0.99).chooseAction(s)).toMatchObject({ skipTarget: 2 })
+  })
+
+  it('picks at random when score and standing cannot separate the targets', () => {
+    const s = craftedGame([...nums(5, 5, 5, 7, 7, 4), skip()], { player: 1, setups: THREE_PLAYERS })
+    const picks = new Set<number>()
+    for (const r of [0.1, 0.9]) {
+      const a = createBot('expert', () => r).chooseAction(s)
+      if (a.type === 'discard') picks.add(a.skipTarget as number)
+    }
+    expect([...picks].sort()).toEqual([0, 2])
   })
 })
