@@ -117,7 +117,7 @@
         {#if level === 'easy'}
           Easy players miss good cards, sometimes throw away ones they need, and remember nothing about your plays.
         {:else if level === 'medium'}
-          Medium players make the odd mistake, add cards to the table one at a time without planning ahead, and only remember each player's last pickup and last two discards.
+          Medium players make mistakes now and then, add cards to the table one at a time without planning ahead, and only remember each player's last pickup and last two discards.
         {:else}
           Expert players grab useful discards, lay down quickly, hit every card they can, and remember every pickup and discard this round.
         {/if}

@@ -12,7 +12,7 @@
 //
 // Levels:
 //  - easy:   makes deliberate mistakes some of the time and remembers nothing about the others.
-//  - medium: plays cleanly but only remembers each opponent's last pickup and last two discards.
+//  - medium: makes more mistakes and hits greedily, and only remembers each opponent's last pickup and last two discards.
 //  - expert: plays cleanly and remembers every pickup and discard this round.
 //
 // Defense: once any opponent has laid down they can add cards to the groups on the table, so a
@@ -44,11 +44,11 @@ export interface Bot {
  *  - mistakeRate: how often the bot deliberately plays a weaker move.
  *  - lookAhead:   plans the order of its hits (so Wilds bridge a run) instead of hitting greedily.
  *  - defense:     watches the table, never feeding a nearly-out opponent and Skipping them first.
- * Medium is tuned so Expert beats it about three games in four, and it beats Easy about three in four.
+ * Medium is tuned so Expert beats it about seven games in ten, and it beats Easy about seven in ten.
  */
 const RULES: Record<BotLevel, { mistakeRate: number; lookAhead: boolean; defense: boolean }> = {
   easy: { mistakeRate: 0.35, lookAhead: true, defense: true },
-  medium: { mistakeRate: 0.08, lookAhead: false, defense: false },
+  medium: { mistakeRate: 0.2, lookAhead: false, defense: true },
   expert: { mistakeRate: 0, lookAhead: true, defense: true },
 }
 
