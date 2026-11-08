@@ -2,6 +2,7 @@
   import { PHASES, targetPhase } from '../engine'
   import type { BotLevel, GameMode } from '../engine'
   import UpdateBanner from './UpdateBanner.svelte'
+  import WhatsNew from './WhatsNew.svelte'
   import { loadSettings, saveSettings } from './storage'
   import type { Session } from './storage'
 
@@ -26,6 +27,7 @@
   let opponents = $state<1 | 2 | 3>(last.opponents ?? 1)
   let level = $state<BotLevel>(last.level ?? 'medium')
   let mode = $state<GameMode>(last.mode ?? 'classic')
+  let showChanges = $state(false)
 
   // The date and time are shown in the viewer's own time zone.
   const buildInfo = `${__BUILD_LABEL__}, built ${new Date(__BUILD_TIME__).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`
@@ -51,6 +53,7 @@
 </script>
 
 <main class="setup">
+  <WhatsNew bind:showAll={showChanges} />
   <UpdateBanner />
   <header>
     <h1>Fase Ten</h1>
@@ -168,7 +171,10 @@
 
   <footer>
     <p>Unofficial fan project. Phase 10 is a trademark of Mattel.</p>
-    <p class="build">{buildInfo}</p>
+    <p class="build">
+      {buildInfo} &middot;
+      <button type="button" class="link" onclick={() => (showChanges = true)}>What's new</button>
+    </p>
   </footer>
 </main>
 
@@ -347,5 +353,14 @@
     margin-top: 0.25rem;
     font-size: 0.75rem;
     opacity: 0.8;
+  }
+  .link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
   }
 </style>
