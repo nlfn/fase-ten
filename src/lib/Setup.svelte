@@ -143,8 +143,8 @@
         right now. If you do not complete it, you try the same phase again next round.
       </p>
       <p>
-        <strong>Backwards:</strong> also called Net Esaf, Fase Ten spelled backwards. Everyone starts on Phase 10
-        and works down to Phase 1. Miss your phase and you try it again next round, the same as the classic game.
+        <strong>Backwards:</strong> everyone starts on Phase 10 and works down to Phase 1. Miss your phase and you
+        try it again next round, the same as the classic game.
       </p>
       <ul>
         <li><strong>Set:</strong> cards with the same number.</li>
@@ -152,7 +152,11 @@
         <li><strong>Wild:</strong> stands in for any card. Every group needs at least one regular card.</li>
         <li><strong>Skip:</strong> can't be used in a group. Discard it to make another player lose a turn.</li>
         <li><strong>Points left in hand:</strong> 1 to 9 are 5 each, 10 to 12 are 10 each, Skip is 15, Wild is 25.</li>
-        <li>You only get credit for a phase if you laid it down. The lowest score wins ties.</li>
+        <li>You only get credit for a phase if you laid it down.</li>
+        <li>
+          <strong>Winning:</strong> the game ends when a player completes their last phase. If more than one
+          player completes theirs in the same round, the lowest score wins.
+        </li>
       </ul>
       <ol class="phases">
         {#each PHASES as phase (phase.number)}
