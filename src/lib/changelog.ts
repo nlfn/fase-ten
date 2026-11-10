@@ -13,6 +13,12 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 19,
+    date: '2026-11-09',
+    title: 'Phases table fits four players',
+    body: 'The Phases table no longer runs off the side of a phone with four players. A few alternate phase names are shorter (a "rainbow run" has the same number of each color, a "color run" is all one color), and a long player name is cut with dots.',
+  },
+  {
     id: 18,
     date: '2026-11-09',
     title: 'Alternate phases rebalanced',

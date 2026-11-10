@@ -154,7 +154,7 @@ describe('alternate phases', () => {
   })
 
   it('five of one color plus a set of three needs the cards to be different ones', () => {
-    const p = at('5 cards of one color + 1 set of 3')
+    const p = at('5 of one color + 1 set of 3')
     const reds = [num(1), num(2), num(3), num(4), num(5)]
     const set = [num(9, 'blue'), num(9, 'green'), num(9, 'yellow')]
     expect(matchPhase(p, [reds, set], LAB)).not.toBeNull()
