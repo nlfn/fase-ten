@@ -84,9 +84,10 @@ export const ALTERNATE_CANDIDATES: readonly PhaseDef[] = [
 /**
  * The ten alternate phases, easiest first. The order comes from simulated games: the bots played thousands
  * of rounds at a table where everyone is on a random phase, and the phases are ranked by how often a player
- * managed to lay down before the round ended (Expert, 3 players). The list is picked to climb evenly from about
- * 80% to about 50%, with no phase that ends the round within two or three turns, and nothing but the run of
- * ten uses all ten cards in a hand.
+ * managed to lay down before the round ended (Expert, 3 players). The list climbs evenly from about 80% to
+ * about 50%, with no early phase that ends the round within two or three turns, and nothing but the run of
+ * ten uses all ten cards in a hand. The last two are deliberate: whoever lays down the run of ten goes out at
+ * once, and the run of six in one color (about 37%) is the capstone, where only one player can go out.
  */
 const ALTERNATE_ORDER = [
   '5 cards of one color + 1 set of 3',
@@ -96,9 +97,9 @@ const ALTERNATE_ORDER = [
   '1 run of 6 evens + 1 set of 2',
   '1 run of 5 odds + 1 set of 3',
   '1 run of 4 in one color + 1 set of 3',
-  '1 set of 4 + 1 run of 5',
   '1 run of 8 with 2 of each color',
   '1 run of 10',
+  '1 run of 6 in one color',
 ]
 
 export const ALTERNATE_PHASES: readonly PhaseDef[] = ALTERNATE_ORDER.map((description, i) => {
