@@ -125,7 +125,7 @@ export function createBot(level: BotLevel = 'expert', random: () => number = Mat
   function missingFor(state: GameState, me: Player, hand: readonly Card[]): number {
     const open = openPhases(state, me)
     if (open.length === 0) return 0
-    return Math.min(...open.map((i) => phaseMissing(hand, i)))
+    return Math.min(...open.map((i) => phaseMissing(hand, i, state.phaseSet)))
   }
 
   function chooseDraw(state: GameState): Action {
@@ -150,10 +150,10 @@ export function createBot(level: BotLevel = 'expert', random: () => number = Mat
       // In YouSee any unfinished phase will do. Take the biggest one the hand can make, since
       // the small ones are easy to pick up later.
       const ready = openPhases(state, me)
-        .filter((i) => phaseMissing(me.hand, i) === 0)
-        .sort((a, b) => phaseSize(b) - phaseSize(a) || b - a)
+        .filter((i) => phaseMissing(me.hand, i, state.phaseSet) === 0)
+        .sort((a, b) => phaseSize(b, state.phaseSet) - phaseSize(a, state.phaseSet) || b - a)
       for (const phase of ready) {
-        const layout = findPhaseLayout(me.hand, phase, state.melds)
+        const layout = findPhaseLayout(me.hand, phase, state.melds, state.phaseSet)
         if (layout) {
           return { type: 'layDown', groups: layout.map((g) => g.map((c) => c.id)), phase }
         }
@@ -187,7 +187,8 @@ export function createBot(level: BotLevel = 'expert', random: () => number = Mat
         } else if (meld.kind === 'run') {
           // Wilds go last. On a run, pick the end that lets another card of ours follow it.
           for (const end of target.ends) {
-            const follow = end === 'high' ? meld.end + 2 : meld.start - 2
+            const gap = 2 * (meld.step ?? 1)
+            const follow = end === 'high' ? meld.end + gap : meld.start - gap
             const helps = me.hand.some((c) => c.kind === 'number' && c.value === follow)
             options.push({ card, meldId: meld.id, end, rank: helps ? 20 : 10 })
           }

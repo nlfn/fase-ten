@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { PHASES, targetPhase } from '../engine'
+  import { phasesOf, targetPhase } from '../engine'
   import type { GameState } from '../engine'
 
   interface Props {
@@ -7,6 +7,7 @@
   }
 
   let { game }: Props = $props()
+  const phases = $derived(phasesOf(game.phaseSet ?? 'classic'))
 
   type Mark = 'done' | 'laid' | 'now' | 'open'
 
@@ -49,7 +50,7 @@
       </tr>
     </thead>
     <tbody>
-      {#each PHASES as phase, pi (phase.number)}
+      {#each phases as phase, pi (phase.number)}
         {@const parts = phase.description.split(' + ')}
         <tr>
           <th scope="row">
@@ -76,7 +77,7 @@
       <tr>
         <th scope="row">Completed</th>
         {#each game.players as p, i (i)}
-          <td class="total">{p.done.filter(Boolean).length} of {PHASES.length}</td>
+          <td class="total">{p.done.filter(Boolean).length} of {phases.length}</td>
         {/each}
       </tr>
     </tfoot>

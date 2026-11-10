@@ -1,7 +1,7 @@
 // Saves the game in the browser so a refresh or a closed tab does not lose it.
 
 import { upgradeSavedState } from '../engine'
-import type { BotLevel, GameMode, GameState } from '../engine'
+import type { BotLevel, GameMode, GameState, PhaseSet } from '../engine'
 
 const KEY = 'fase-ten:session:v1'
 
@@ -65,6 +65,7 @@ export interface Settings {
   opponents: 1 | 2 | 3
   level: BotLevel
   mode: GameMode
+  phaseSet: PhaseSet
 }
 
 /** Checks a stored value field by field; anything missing or odd is left out. */
@@ -77,6 +78,7 @@ export function parseSettings(raw: unknown): Partial<Settings> {
   const level = parseLevel(r.level)
   if (level) out.level = level
   if (r.mode === 'classic' || r.mode === 'yousee' || r.mode === 'random' || r.mode === 'reverse') out.mode = r.mode
+  if (r.phaseSet === 'classic' || r.phaseSet === 'alternate') out.phaseSet = r.phaseSet
   return out
 }
 

@@ -15,12 +15,12 @@ const cardSig = (c: Card): string => (c.kind === 'number' ? `n${c.value}${c.colo
 function meldSig(m: MeldBody): string {
   if (m.kind === 'set') return `s${m.value}`
   if (m.kind === 'color') return `c${m.color}`
-  return `r${m.start}-${m.end}`
+  return `r${m.start}-${m.end}${m.step ? 'e' : ''}${m.color ?? ''}`
 }
 
 /** A copy of a group that only keeps what decides which cards fit. */
 export function lite(m: MeldBody): MeldBody {
-  if (m.kind === 'run') return { kind: 'run', start: m.start, end: m.end, cards: [] }
+  if (m.kind === 'run') return { kind: 'run', start: m.start, end: m.end, cards: [], step: m.step, color: m.color }
   if (m.kind === 'set') return { kind: 'set', value: m.value, cards: [] }
   return { kind: 'color', color: m.color, cards: [] }
 }
@@ -29,9 +29,10 @@ export function lite(m: MeldBody): MeldBody {
 export function withHit(melds: readonly MeldBody[], index: number, end: RunEnd | undefined): MeldBody[] {
   return melds.map((m, i) => {
     if (i !== index || m.kind !== 'run') return m
+    const step = m.step ?? 1
     return end === 'high'
-      ? { kind: 'run', start: m.start, end: m.end + 1, cards: [] }
-      : { kind: 'run', start: m.start - 1, end: m.end, cards: [] }
+      ? { kind: 'run', start: m.start, end: m.end + step, cards: [], step: m.step, color: m.color }
+      : { kind: 'run', start: m.start - step, end: m.end, cards: [], step: m.step, color: m.color }
   })
 }
 

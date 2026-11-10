@@ -65,6 +65,30 @@ A third mode. Like classic, but each player has their own secret random order fo
 
 A fourth mode, Fase Ten spelled backwards. Everyone starts on Phase 10 and works down to Phase 1, one phase at a time, and a missed phase is tried again next round. In the engine this is `mode: 'reverse'`: every player's `order` is the plain order reversed, so `targetPhase` does the rest.
 
+### Alternate phases
+
+A second list of ten phases, chosen on the welcome screen (`phaseSet: 'alternate'` on the game state). It works with every ordering above. Easiest first:
+
+1. 4 sets of 2
+2. 3 runs of 3
+3. 2 runs of 4
+4. 5 cards of one color + 1 set of 3
+5. 1 run of 6 evens + 1 set of 2
+6. 1 run of 5 odds + 1 set of 3
+7. 1 run of 8 with 2 of each color
+8. 3 sets of 3
+9. 1 run of 10
+10. 1 run of 6 in one color
+
+New kinds of group (all in `phases.ts`):
+
+- **Run of evens or odds** steps by two. A run of five evens is 2 to 10 or 4 to 12 and can grow by the next even number at either end. A run of six evens (2 to 12) or odds (1 to 11) is complete and takes no hits, not even a Wild.
+- **Run in one color** only takes cards of that color (or a Wild) when hit.
+- **Run with two of each color** is checked when laid down (no color more than twice, Wilds fill the gaps). Afterwards it is an ordinary run, so any color can be added.
+- A phase can have up to four groups (4 sets of 2).
+
+Difficulty order comes from simulated games (`phaseSet` in the engine, scripts not kept in the repo). With three Expert bots at a table where everyone is on a random phase, about 5,000 rounds, the share of players who laid down before the round ended was: 4 sets of 2 91%, 3 runs of 3 and 2 runs of 4 78%, color plus set 76%, evens 65%, odds 64%, rainbow 52%, 3 sets of 3 52%, run of 10 46%, run of 6 in one color 35%. For comparison the classic phases range from 92% (set of 3 + run of 4) to 46% (2 sets of 4, and 5 + 3). Three other candidates were tried and left out because they sat too close to these: 1 run of 5 evens + 1 set of 2 (75%), 1 run of 6 odds + 1 set of 3 (50%) and 1 run of 5 evens + 1 set of 4 (43%). Swapping a phase means editing `ALTERNATE_ORDER` in `phases.ts`.
+
 ## Computer players
 
 All levels follow the same plan: take a discard only if it brings the hand closer to the phase, lay down as soon as possible, hit every card they can (natural cards first, Wilds last), dump Skips on the most dangerous opponent, and discard the highest-point card that does not hurt the phase.
