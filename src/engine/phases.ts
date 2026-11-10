@@ -13,8 +13,9 @@ import type { Card, Color, NumberCard } from './cards'
  * parity: a run that only uses even or odd numbers, stepping by two (a "run of six evens" is 2, 4, 6, 8, 10, 12).
  * colorRun: a run where every card is the same color.
  * rainbow: a run with the same number of cards of each color (size / 4). Once laid it is a plain run.
+ * pureRun: a run made only of number cards. No Wilds can be used to lay it down (they can still be added afterwards).
  */
-export type GroupKind = 'set' | 'run' | 'color' | 'parity' | 'colorRun' | 'rainbow'
+export type GroupKind = 'set' | 'run' | 'color' | 'parity' | 'colorRun' | 'rainbow' | 'pureRun'
 
 export type Parity = 'even' | 'odd'
 
@@ -40,6 +41,7 @@ const evens = (size: number): GroupSpec => ({ kind: 'parity', size, parity: 'eve
 const odds = (size: number): GroupSpec => ({ kind: 'parity', size, parity: 'odd' })
 const colorRun = (size: number): GroupSpec => ({ kind: 'colorRun', size })
 const rainbow = (size: number): GroupSpec => ({ kind: 'rainbow', size })
+const pureRun = (size: number): GroupSpec => ({ kind: 'pureRun', size })
 
 export const PHASES: readonly PhaseDef[] = [
   { number: 1, groups: [set(3), set(3)], description: '2 sets of 3' },
@@ -83,6 +85,10 @@ export const ALTERNATE_CANDIDATES: readonly PhaseDef[] = [
   { number: 0, groups: [rainbow(4), set(4)], description: '1 rainbow run of 4 + 1 set of 4' },
   { number: 0, groups: [colorRun(3), colorRun(3)], description: '2 color runs of 3' },
   { number: 0, groups: [colorRun(3), colorRun(3), colorRun(3)], description: '3 color runs of 3' },
+  { number: 0, groups: [pureRun(6)], description: '1 run of 6, no Wilds' },
+  { number: 0, groups: [pureRun(7)], description: '1 run of 7, no Wilds' },
+  { number: 0, groups: [pureRun(8)], description: '1 run of 8, no Wilds' },
+  { number: 0, groups: [pureRun(9)], description: '1 run of 9, no Wilds' },
 ]
 
 /**
@@ -123,6 +129,11 @@ function defsOf(set: string): readonly PhaseDef[] {
 
 export function phasesOf(set: PhaseSet): readonly PhaseDef[] {
   return defsOf(set)
+}
+
+/** Whether Wilds can help lay this phase down. False when every group is a run with no Wilds. */
+export function allowsWilds(phaseIdx: number, set: PhaseSet = 'classic'): boolean {
+  return !(defsOf(set)[phaseIdx]?.groups ?? []).every((g) => g.kind === 'pureRun')
 }
 
 /** How many cards the phase asks for in total. */
@@ -275,6 +286,8 @@ export function buildGroup(spec: GroupSpec, cards: readonly Card[]): MeldBody | 
       return buildRun(cards, spec.size, { sameColor: true })
     case 'rainbow':
       return buildRainbow(cards, spec.size)
+    case 'pureRun':
+      return cards.some((c) => c.kind === 'wild') ? null : buildRun(cards, spec.size)
   }
 }
 
@@ -392,6 +405,9 @@ function mayJoin(spec: GroupSpec, cards: readonly Card[]): boolean {
       return naturals.every((c) => c.value === naturals[0].value)
     case 'color':
       return naturals.every((c) => c.color === naturals[0].color)
+    case 'pureRun':
+      if (cards.some((c) => c.kind === 'wild')) return false
+      break
     case 'colorRun':
       if (!naturals.every((c) => c.color === naturals[0].color)) return false
       break
@@ -733,5 +749,7 @@ export function phaseMissing(hand: readonly Card[], phaseIdx: number, set: Phase
   }
 
   const got = most(specs.slice().sort((x, y) => y.size - x.size), counts)
-  return Math.max(0, needed - got - wilds)
+  // Wilds only help with groups that allow them.
+  const fillers = specs.every((g) => g.kind === 'pureRun') ? 0 : wilds
+  return Math.max(0, needed - got - fillers)
 }
