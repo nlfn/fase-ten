@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { parseLevel, parseSettings } from './storage'
 
 describe('parseSettings', () => {
+  it('keeps a valid phase set and drops an unknown one', () => {
+    expect(parseSettings({ phaseSet: 'alternate' })).toEqual({ phaseSet: 'alternate' })
+    expect(parseSettings({ phaseSet: 'classic' })).toEqual({ phaseSet: 'classic' })
+    expect(parseSettings({ phaseSet: 'wild' })).toEqual({})
+  })
+
   it('keeps valid values', () => {
     expect(parseSettings({ name: ' Karla ', opponents: 2, level: 'easy', mode: 'yousee' })).toEqual({
       name: 'Karla',

@@ -13,6 +13,12 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 17,
+    date: '2026-11-09',
+    title: 'Alternate phases',
+    body: 'The welcome screen has a new Phases choice: Classic or Alternate. Alternate is a different list of ten, from four pairs up to a run of six in one color, with runs of evens or odds, a run with two of each color, and a run of ten. It works with every ordering. The easiest comes first and the hardest last.',
+  },
+  {
     id: 16,
     date: '2026-11-08',
     title: 'Tiebreaker round',

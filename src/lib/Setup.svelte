@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { PHASES, targetPhase } from '../engine'
-  import type { BotLevel, GameMode } from '../engine'
+  import { phasesOf, targetPhase } from '../engine'
+  import type { BotLevel, GameMode, PhaseSet } from '../engine'
   import UpdateBanner from './UpdateBanner.svelte'
   import WhatsNew from './WhatsNew.svelte'
   import { loadSettings, saveSettings } from './storage'
@@ -11,6 +11,7 @@
     opponents: 1 | 2 | 3
     level: BotLevel
     mode: GameMode
+    phaseSet: PhaseSet
   }
 
   interface Props {
@@ -27,6 +28,7 @@
   let opponents = $state<1 | 2 | 3>(last.opponents ?? 1)
   let level = $state<BotLevel>(last.level ?? 'medium')
   let mode = $state<GameMode>(last.mode ?? 'classic')
+  let phaseSet = $state<PhaseSet>(last.phaseSet ?? 'classic')
   let showChanges = $state(false)
 
   // The date and time are shown in the viewer's own time zone.
@@ -48,7 +50,7 @@
 
   function submit(event: SubmitEvent) {
     event.preventDefault()
-    const config: GameConfig = { name: name.trim() || 'You', opponents, level, mode }
+    const config: GameConfig = { name: name.trim() || 'You', opponents, level, mode, phaseSet }
     saveSettings(config)
     onStart(config)
   }
@@ -77,6 +79,22 @@
       <span>Your name</span>
       <input type="text" bind:value={name} maxlength="16" autocomplete="off" />
     </label>
+
+    <fieldset>
+      <legend>Phases</legend>
+      <div class="segment wide">
+        <label><input type="radio" name="phaseSet" value="classic" bind:group={phaseSet} /><span>Classic</span></label>
+        <label><input type="radio" name="phaseSet" value="alternate" bind:group={phaseSet} /><span>Alternate</span></label>
+      </div>
+      <p class="hint">
+        {#if phaseSet === 'classic'}
+          The ten phases from the card game.
+        {:else}
+          Ten different phases: runs of evens or odds, runs in one color, runs with two of every color, and more.
+          The list is under How to play.
+        {/if}
+      </p>
+    </fieldset>
 
     <fieldset>
       <legend>Fase Ordering</legend>
@@ -165,7 +183,7 @@
         </li>
       </ul>
       <ol class="phases">
-        {#each PHASES as phase (phase.number)}
+        {#each phasesOf(phaseSet) as phase (phase.number)}
           <li>{phase.description}</li>
         {/each}
       </ol>

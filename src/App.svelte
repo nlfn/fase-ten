@@ -16,7 +16,7 @@
       ...pickBotNames(config.name, config.opponents).map((name) => ({ name, isBot: true })),
     ]
     clearSession()
-    session = { state: createGame(players, undefined, config.mode), level: config.level }
+    session = { state: createGame(players, undefined, config.mode, config.phaseSet), level: config.level }
   }
 
   function resume() {

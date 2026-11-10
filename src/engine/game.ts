@@ -12,7 +12,7 @@ import {
 } from './cards'
 import type { Card } from './cards'
 import { PHASE_COUNT, canHit, hitMeld, matchPhase, phaseDescription, runEndsFor } from './phases'
-import type { Meld, RunEnd } from './phases'
+import type { Meld, PhaseSet, RunEnd } from './phases'
 
 /**
  * classic: you work through the ten phases in order.
@@ -83,6 +83,7 @@ export type PlayEvent =
 
 export interface GameState {
   mode: GameMode
+  phaseSet: PhaseSet // which list of ten phases this game uses
   players: Player[]
   drawPile: Card[] // last element is the top
   discardPile: Card[] // last element is the top
@@ -143,12 +144,14 @@ export function createGame(
   setups: readonly PlayerSetup[],
   seed: number = randomSeed(),
   mode: GameMode = 'classic',
+  phaseSet: PhaseSet = 'classic',
 ): GameState {
   if (setups.length < 2 || setups.length > 6) {
     throw new Error('Phase games need between 2 and 6 players')
   }
   const state: GameState = {
     mode,
+    phaseSet,
     players: setups.map((p) => ({
       name: p.name,
       isBot: p.isBot,
@@ -454,9 +457,9 @@ export function applyAction(state: GameState, action: Action): ActionResult {
         if (player.done[chosen]) return fail(`You already completed Phase ${chosen + 1}`)
         phaseIdx = chosen
       }
-      const bodies = matchPhase(phaseIdx, groups)
+      const bodies = matchPhase(phaseIdx, groups, s.phaseSet)
       if (!bodies) {
-        return fail(`Those cards do not make Phase ${phaseIdx + 1} (${phaseDescription(phaseIdx)})`)
+        return fail(`Those cards do not make Phase ${phaseIdx + 1} (${phaseDescription(phaseIdx, s.phaseSet)})`)
       }
       player.hand = player.hand.filter((c) => !used.has(c.id))
       for (const body of bodies) {
@@ -566,6 +569,7 @@ export function upgradeSavedState(state: GameState): GameState {
   state.mode ??= 'classic'
   state.tiebreak ??= null
   state.tieNext ??= null
+  state.phaseSet ??= 'classic'
   for (const p of state.players) {
     p.order ??= Array.from({ length: PHASE_COUNT }, (_, i) => i)
     p.done ??= Array.from({ length: PHASE_COUNT }, (_, i) => i < p.phase)

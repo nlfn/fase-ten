@@ -1,6 +1,5 @@
 <script lang="ts">
   import {
-    PHASES,
     PHASE_COUNT,
     targetPhase,
     applyAction,
@@ -16,6 +15,7 @@
     meldsOf,
     nextRound,
     phaseDescription,
+    phasesOf,
     recentHitIds,
     topDiscard,
   } from '../engine'
@@ -81,12 +81,12 @@
   // so picking a different card replaces the selection instead of adding to it.
   const handCanLay = $derived.by(() => {
     if (me.laidDown || (targetPhase(game, me) === null && !yousee)) return false
-    return PHASES.some((_, i) => (yousee ? !me.done[i] : i === myTarget) && findPhaseLayout(me.hand, i, game.melds) !== null)
+    return phases.some((_, i) => (yousee ? !me.done[i] : i === myTarget) && findPhaseLayout(me.hand, i, game.melds, game.phaseSet) !== null)
   })
   const canLay = $derived.by(() => {
     if (!myTurn || game.stage !== 'play' || me.laidDown) return false
     if (targetPhase(game, me) === null && !yousee) return false
-    return PHASES.some((_, i) => (yousee ? !me.done[i] : i === myTarget) && layoutFor(i) !== null)
+    return phases.some((_, i) => (yousee ? !me.done[i] : i === myTarget) && layoutFor(i) !== null)
   })
   const sortedHand = $derived(sortHand(me.hand, sortMode))
   // Cards added to a group during the last full lap of the table, shown with an outline.
@@ -100,6 +100,7 @@
   const skipTargets = $derived(
     game.players.map((p, i) => i !== HUMAN && p.skipsPending === 0 && !isSittingOut(game, i)),
   )
+  const phases = $derived(phasesOf(game.phaseSet))
   const noSkipTarget = $derived(!skipTargets.some(Boolean))
   const canPlaySkip = $derived(myTurn && game.stage === 'play' && skipSelected && !noSkipTarget)
   const canDiscard = $derived(
@@ -121,7 +122,7 @@
     if (!me.laidDown) {
       return yousee
         ? 'Lay down any phase you have not completed when you can, then discard one card.'
-        : `Lay down Phase ${myTarget + 1} (${phaseDescription(myTarget)}) when you can, then discard one card.`
+        : `Lay down Phase ${myTarget + 1} (${phaseDescription(myTarget, game.phaseSet)}) when you can, then discard one card.`
     }
     return 'Pick a card to add to a group on the table, or discard one card to end your turn.'
   })
@@ -256,13 +257,13 @@
   /** The groups a phase would be laid down as: from the selected cards if several are picked, else the best layout in hand. */
   function layoutFor(phase: number): Card[][] | null {
     return selectedCards.length > 1
-      ? arrangeSelection(selectedCards, phase)
-      : findPhaseLayout(me.hand, phase, game.melds)
+      ? arrangeSelection(selectedCards, phase, game.phaseSet)
+      : findPhaseLayout(me.hand, phase, game.melds, game.phaseSet)
   }
 
   const pickerOptions = $derived.by((): PhaseOption[] => {
     if (!showPicker) return []
-    return PHASES.map((phase, index) => ({
+    return phases.map((phase, index) => ({
       index,
       description: phase.description,
       status: me.done[index] ? 'done' : layoutFor(index) ? 'ready' : 'notyet',
@@ -308,7 +309,7 @@
 
     if (yousee) {
       // You choose the phase, so show the ones these cards can make and let the player pick.
-      const canMake = PHASES.some((_, i) => !me.done[i] && layoutFor(i) !== null)
+      const canMake = phases.some((_, i) => !me.done[i] && layoutFor(i) !== null)
       if (!canMake) {
         notice =
           selectedCards.length > 1
@@ -324,15 +325,15 @@
     let groups: Card[][] | null
     // One selected card can never be a whole phase, so a single card means "find it for me".
     if (selectedCards.length > 1) {
-      groups = arrangeSelection(selectedCards, myTarget)
+      groups = arrangeSelection(selectedCards, myTarget, game.phaseSet)
       if (!groups) {
-        notice = `Those cards do not make Phase ${myTarget + 1} (${phaseDescription(myTarget)}).`
+        notice = `Those cards do not make Phase ${myTarget + 1} (${phaseDescription(myTarget, game.phaseSet)}).`
         return
       }
     } else {
-      groups = findPhaseLayout(me.hand, myTarget, game.melds)
+      groups = findPhaseLayout(me.hand, myTarget, game.melds, game.phaseSet)
       if (!groups) {
-        notice = `You can't lay down yet. Phase ${myTarget + 1} needs ${phaseDescription(myTarget)}.`
+        notice = `You can't lay down yet. Phase ${myTarget + 1} needs ${phaseDescription(myTarget, game.phaseSet)}.`
         return
       }
     }
@@ -385,6 +386,8 @@
       case 'set':
         return `Set of ${m.value}s`
       case 'run':
+        if (m.step) return `${m.start % 2 === 0 ? 'Even' : 'Odd'} run ${m.start} to ${m.end}`
+        if (m.color) return `${m.color[0].toUpperCase()}${m.color.slice(1)} run ${m.start} to ${m.end}`
         return `Run ${m.start} to ${m.end}`
       case 'color':
         return `${m.color[0].toUpperCase()}${m.color.slice(1)} cards`
@@ -417,11 +420,11 @@
   /** What a player is after right now, shown under their stats. */
   function goalLine(p: GameState['players'][number]): string {
     if (p.laidDown && p.laidPhase !== null) {
-      return `Laid down Phase ${p.laidPhase + 1}: ${phaseDescription(p.laidPhase)}`
+      return `Laid down Phase ${p.laidPhase + 1}: ${phaseDescription(p.laidPhase, game.phaseSet)}`
     }
     if (yousee) return ''
     const target = targetPhase(game, p)
-    return target === null ? '' : phaseDescription(target)
+    return target === null ? '' : phaseDescription(target, game.phaseSet)
   }
 </script>
 
@@ -439,7 +442,7 @@
         {#if m.kind === 'run'}
           {#each target.ends as end (end)}
             <button type="button" class="chip" onclick={() => hit(m.id, end)}>
-              Add as {end === 'low' ? m.start - 1 : m.end + 1}
+              Add as {end === 'low' ? m.start - (m.step ?? 1) : m.end + (m.step ?? 1)}
             </button>
           {/each}
         {:else}
@@ -454,11 +457,11 @@
   <header class="bar">
     <h1>{game.tiebreak ? 'Tiebreaker' : `Round ${game.round}`}</h1>
     {#if me.laidDown && me.laidPhase !== null}
-      <p class="goal"><strong>Phase {me.laidPhase + 1}</strong> {phaseDescription(me.laidPhase)}</p>
+      <p class="goal"><strong>Phase {me.laidPhase + 1}</strong> {phaseDescription(me.laidPhase, game.phaseSet)}</p>
     {:else if yousee}
       <p class="goal"><strong>Your choice</strong> {me.phase} of {PHASE_COUNT} phases done</p>
     {:else}
-      <p class="goal"><strong>Phase {myTarget + 1}</strong> {phaseDescription(myTarget)}</p>
+      <p class="goal"><strong>Phase {myTarget + 1}</strong> {phaseDescription(myTarget, game.phaseSet)}</p>
     {/if}
     <button type="button" class="ghost" onclick={() => (sheet = 'scores')}>Scores</button>
     <button type="button" class="ghost" onclick={() => (sheet = 'phases')}>Phases</button>

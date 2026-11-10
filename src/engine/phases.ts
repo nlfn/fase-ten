@@ -8,12 +8,24 @@
 import { COLORS, MAX_VALUE, MIN_VALUE, handPoints } from './cards'
 import type { Card, Color, NumberCard } from './cards'
 
-export type GroupKind = 'set' | 'run' | 'color'
+/**
+ * set: same number. run: consecutive numbers. color: any numbers, all one color.
+ * parity: a run that only uses even or odd numbers, stepping by two (a "run of six evens" is 2, 4, 6, 8, 10, 12).
+ * colorRun: a run where every card is the same color.
+ * rainbow: a run with the same number of cards of each color (size / 4). Once laid it is a plain run.
+ */
+export type GroupKind = 'set' | 'run' | 'color' | 'parity' | 'colorRun' | 'rainbow'
+
+export type Parity = 'even' | 'odd'
 
 export interface GroupSpec {
   kind: GroupKind
   size: number
+  parity?: Parity
 }
+
+/** Which list of ten phases a game uses. */
+export type PhaseSet = 'classic' | 'alternate'
 
 export interface PhaseDef {
   number: number
@@ -24,6 +36,10 @@ export interface PhaseDef {
 const set = (size: number): GroupSpec => ({ kind: 'set', size })
 const run = (size: number): GroupSpec => ({ kind: 'run', size })
 const color = (size: number): GroupSpec => ({ kind: 'color', size })
+const evens = (size: number): GroupSpec => ({ kind: 'parity', size, parity: 'even' })
+const odds = (size: number): GroupSpec => ({ kind: 'parity', size, parity: 'odd' })
+const colorRun = (size: number): GroupSpec => ({ kind: 'colorRun', size })
+const rainbow = (size: number): GroupSpec => ({ kind: 'rainbow', size })
 
 export const PHASES: readonly PhaseDef[] = [
   { number: 1, groups: [set(3), set(3)], description: '2 sets of 3' },
@@ -40,13 +56,68 @@ export const PHASES: readonly PhaseDef[] = [
 
 export const PHASE_COUNT = PHASES.length
 
-/** How many cards the phase asks for in total. */
-export function phaseSize(phaseIdx: number): number {
-  return (PHASES[phaseIdx]?.groups ?? []).reduce((sum, g) => sum + g.size, 0)
+/** Every alternate phase being considered, in no particular order. The game uses ten of them (see ALTERNATE_PHASES). */
+export const ALTERNATE_CANDIDATES: readonly PhaseDef[] = [
+  { number: 0, groups: [set(2), set(2), set(2), set(2)], description: '4 sets of 2' },
+  { number: 0, groups: [set(3), set(3), set(3)], description: '3 sets of 3' },
+  { number: 0, groups: [run(4), run(4)], description: '2 runs of 4' },
+  { number: 0, groups: [run(3), run(3), run(3)], description: '3 runs of 3' },
+  { number: 0, groups: [color(5), set(3)], description: '5 cards of one color + 1 set of 3' },
+  { number: 0, groups: [evens(6), set(2)], description: '1 run of 6 evens + 1 set of 2' },
+  { number: 0, groups: [odds(6), set(3)], description: '1 run of 6 odds + 1 set of 3' },
+  { number: 0, groups: [colorRun(6)], description: '1 run of 6 in one color' },
+  { number: 0, groups: [rainbow(8)], description: '1 run of 8 with 2 of each color' },
+  { number: 0, groups: [run(10)], description: '1 run of 10' },
+  { number: 0, groups: [evens(5), set(4)], description: '1 run of 5 evens + 1 set of 4' },
+  { number: 0, groups: [odds(5), set(3)], description: '1 run of 5 odds + 1 set of 3' },
+  { number: 0, groups: [evens(5), set(2)], description: '1 run of 5 evens + 1 set of 2' },
+]
+
+/**
+ * The ten alternate phases, easiest first. The order comes from simulated games: for each candidate, the
+ * bots played thousands of rounds at a table where everyone is on a random phase, and the phases are
+ * ranked by how often a player managed to lay down before the round ended (Expert, 3 players), with
+ * the time taken to lay down breaking ties. Three candidates were left out as too close to others.
+ */
+const ALTERNATE_ORDER = [
+  '4 sets of 2',
+  '3 runs of 3',
+  '2 runs of 4',
+  '5 cards of one color + 1 set of 3',
+  '1 run of 6 evens + 1 set of 2',
+  '1 run of 5 odds + 1 set of 3',
+  '1 run of 8 with 2 of each color',
+  '3 sets of 3',
+  '1 run of 10',
+  '1 run of 6 in one color',
+]
+
+export const ALTERNATE_PHASES: readonly PhaseDef[] = ALTERNATE_ORDER.map((description, i) => {
+  const found = ALTERNATE_CANDIDATES.find((p) => p.description === description)
+  if (!found) throw new Error(`Unknown alternate phase: ${description}`)
+  return { ...found, number: i + 1 }
+})
+
+export const PHASE_SETS: Record<string, readonly PhaseDef[]> = {
+  classic: PHASES,
+  alternate: ALTERNATE_PHASES,
 }
 
-export function phaseDescription(phaseIdx: number): string {
-  return PHASES[phaseIdx]?.description ?? ''
+function defsOf(set: string): readonly PhaseDef[] {
+  return PHASE_SETS[set] ?? PHASES
+}
+
+export function phasesOf(set: PhaseSet): readonly PhaseDef[] {
+  return defsOf(set)
+}
+
+/** How many cards the phase asks for in total. */
+export function phaseSize(phaseIdx: number, set: PhaseSet = 'classic'): number {
+  return (defsOf(set)[phaseIdx]?.groups ?? []).reduce((sum, g) => sum + g.size, 0)
+}
+
+export function phaseDescription(phaseIdx: number, set: PhaseSet = 'classic'): string {
+  return defsOf(set)[phaseIdx]?.description ?? ''
 }
 
 // ---------------------------------------------------------------------------
@@ -65,6 +136,8 @@ export interface RunBody {
   start: number // lowest number the run covers
   end: number // highest number the run covers
   cards: Card[] // ordered low to high, Wilds sit in the position they stand for
+  step?: 2 // a run of evens or odds goes up in twos. Missing means the usual steps of one
+  color?: Color // a run in one color: only cards of that color (and Wilds) can be added
 }
 export interface ColorBody {
   kind: 'color'
@@ -89,13 +162,28 @@ export function buildSet(cards: readonly Card[], minSize: number): SetBody | nul
   return { kind: 'set', value, cards: cards.slice() }
 }
 
+const ALL_VALUES = Array.from({ length: MAX_VALUE - MIN_VALUE + 1 }, (_, i) => MIN_VALUE + i)
+const EVEN_VALUES = ALL_VALUES.filter((v) => v % 2 === 0)
+const ODD_VALUES = ALL_VALUES.filter((v) => v % 2 === 1)
+
+/** The numbers a run steps through: everything, or only the evens or odds. */
+function valuesFor(parity?: Parity): number[] {
+  return parity === 'even' ? EVEN_VALUES : parity === 'odd' ? ODD_VALUES : ALL_VALUES
+}
+
+export interface RunOptions {
+  parity?: Parity // only even or odd numbers, stepping by two
+  sameColor?: boolean // every natural card must be the same color
+}
+
 /**
- * Consecutive numbers (no wrap-around, colors ignored). Wilds fill gaps and
- * any extra Wilds extend the run upward first, then downward if the top is 12.
+ * Consecutive numbers (no wrap-around, colors ignored unless asked). Wilds fill gaps and
+ * any extra Wilds extend the run upward first, then downward if the top is reached.
  */
-export function buildRun(cards: readonly Card[], minSize: number): RunBody | null {
+export function buildRun(cards: readonly Card[], minSize: number, options: RunOptions = {}): RunBody | null {
   const n = cards.length
-  if (n < minSize || n > MAX_VALUE) return null
+  const line = valuesFor(options.parity)
+  if (n < minSize || n > line.length) return null
   const naturals: NumberCard[] = []
   const wilds: Card[] = []
   for (const c of cards) {
@@ -104,30 +192,44 @@ export function buildRun(cards: readonly Card[], minSize: number): RunBody | nul
     else wilds.push(c)
   }
   if (naturals.length === 0) return null
+  if (options.sameColor && naturals.some((c) => c.color !== naturals[0].color)) return null
 
   const seen = new Set<number>()
-  let vmin = Infinity
-  let vmax = -Infinity
+  let imin = Infinity
+  let imax = -Infinity
   for (const c of naturals) {
-    if (seen.has(c.value)) return null
-    seen.add(c.value)
-    if (c.value < vmin) vmin = c.value
-    if (c.value > vmax) vmax = c.value
+    const at = line.indexOf(c.value)
+    if (at < 0) return null // an odd number in a run of evens
+    if (seen.has(at)) return null
+    seen.add(at)
+    if (at < imin) imin = at
+    if (at > imax) imax = at
   }
-  if (vmax - vmin + 1 > n) return null
+  if (imax - imin + 1 > n) return null
 
-  const startLow = Math.max(MIN_VALUE, vmax - n + 1)
-  const startHigh = Math.min(vmin, MAX_VALUE - n + 1)
+  const startLow = Math.max(0, imax - n + 1)
+  const startHigh = Math.min(imin, line.length - n)
   if (startLow > startHigh) return null
   const start = startHigh
 
   const ordered: Array<Card | undefined> = new Array<Card | undefined>(n).fill(undefined)
-  for (const c of naturals) ordered[c.value - start] = c
+  for (const c of naturals) ordered[line.indexOf(c.value) - start] = c
   let w = 0
   for (let i = 0; i < n; i++) {
     if (!ordered[i]) ordered[i] = wilds[w++]
   }
-  return { kind: 'run', start, end: start + n - 1, cards: ordered as Card[] }
+  const body: RunBody = { kind: 'run', start: line[start], end: line[start + n - 1], cards: ordered as Card[] }
+  if (options.parity) body.step = 2
+  if (options.sameColor) body.color = (naturals[0] as NumberCard).color
+  return body
+}
+
+/** A run with exactly size / 4 cards of each color. Wilds stand in for whatever is missing. */
+export function buildRainbow(cards: readonly Card[], size: number): RunBody | null {
+  const each = Math.floor(size / 4)
+  const used: Record<Color, number> = { red: 0, blue: 0, green: 0, yellow: 0 }
+  for (const c of cards) if (c.kind === 'number' && ++used[c.color] > each) return null
+  return buildRun(cards, size)
 }
 
 /** Cards that are all one color. Wilds may stand in. */
@@ -153,6 +255,12 @@ export function buildGroup(spec: GroupSpec, cards: readonly Card[]): MeldBody | 
       return buildRun(cards, spec.size)
     case 'color':
       return buildColor(cards, spec.size)
+    case 'parity':
+      return buildRun(cards, spec.size, { parity: spec.parity })
+    case 'colorRun':
+      return buildRun(cards, spec.size, { sameColor: true })
+    case 'rainbow':
+      return buildRainbow(cards, spec.size)
   }
 }
 
@@ -183,8 +291,9 @@ function permutations(n: number): number[][] {
 export function matchPhase(
   phaseIdx: number,
   groups: ReadonlyArray<readonly Card[]>,
+  set: PhaseSet = 'classic',
 ): MeldBody[] | null {
-  const specs = PHASES[phaseIdx]?.groups
+  const specs = defsOf(set)[phaseIdx]?.groups
   if (!specs || groups.length !== specs.length) return null
   for (const perm of permutations(specs.length)) {
     const bodies: MeldBody[] = []
@@ -210,15 +319,17 @@ export function matchPhase(
 export function runEndsFor(meld: RunBody, card: Card): RunEnd[] {
   const ends: RunEnd[] = []
   if (card.kind === 'skip') return ends
-  const canHigh = meld.end < MAX_VALUE
-  const canLow = meld.start > MIN_VALUE
+  const step = meld.step ?? 1
+  const canHigh = meld.end + step <= MAX_VALUE
+  const canLow = meld.start - step >= MIN_VALUE
   if (card.kind === 'wild') {
     if (canHigh) ends.push('high')
     if (canLow) ends.push('low')
     return ends
   }
-  if (canHigh && card.value === meld.end + 1) ends.push('high')
-  if (canLow && card.value === meld.start - 1) ends.push('low')
+  if (meld.color && card.color !== meld.color) return ends
+  if (canHigh && card.value === meld.end + step) ends.push('high')
+  if (canLow && card.value === meld.start - step) ends.push('low')
   return ends
 }
 
@@ -241,12 +352,13 @@ export function hitMeld(meld: Meld, card: Card, end?: RunEnd): boolean {
   if (!canHit(meld, card, end)) return false
   if (meld.kind === 'run') {
     const useEnd = end ?? runEndsFor(meld, card)[0]
+    const step = meld.step ?? 1
     if (useEnd === 'high') {
       meld.cards.push(card)
-      meld.end += 1
+      meld.end += step
     } else {
       meld.cards.unshift(card)
-      meld.start -= 1
+      meld.start -= step
     }
   } else {
     meld.cards.push(card)
@@ -258,27 +370,65 @@ export function hitMeld(meld: Meld, card: Card, end?: RunEnd): boolean {
 // Solvers (used by the computer players and the "auto lay down" button)
 // ---------------------------------------------------------------------------
 
+/** Could these cards still end up in a group of this kind? Used to cut off hopeless splits early. */
+function mayJoin(spec: GroupSpec, cards: readonly Card[]): boolean {
+  const naturals = cards.filter((c): c is NumberCard => c.kind === 'number')
+  switch (spec.kind) {
+    case 'set':
+      return naturals.every((c) => c.value === naturals[0].value)
+    case 'color':
+      return naturals.every((c) => c.color === naturals[0].color)
+    case 'colorRun':
+      if (!naturals.every((c) => c.color === naturals[0].color)) return false
+      break
+    case 'parity':
+      if (naturals.some((c) => (c.value % 2 === 0) !== (spec.parity === 'even'))) return false
+      break
+    case 'rainbow': {
+      const each = Math.floor(spec.size / 4)
+      for (const col of COLORS) if (naturals.filter((c) => c.color === col).length > each) return false
+      break
+    }
+  }
+  // Every run kind needs different numbers.
+  return new Set(naturals.map((c) => c.value)).size === naturals.length
+}
+
 /**
  * Splits a player's selected cards into the groups the phase asks for, in
  * whichever way works. Returns null if the selection cannot make the phase.
  * Used when a person picks the cards to lay down by hand.
  */
-export function arrangeSelection(cards: readonly Card[], phaseIdx: number): Card[][] | null {
-  const specs = PHASES[phaseIdx]?.groups
+export function arrangeSelection(
+  cards: readonly Card[],
+  phaseIdx: number,
+  set: PhaseSet = 'classic',
+): Card[][] | null {
+  const specs = defsOf(set)[phaseIdx]?.groups
   if (!specs || cards.length === 0) return null
   if (specs.length === 1) {
-    return matchPhase(phaseIdx, [cards]) ? [cards.slice()] : null
+    return matchPhase(phaseIdx, [cards], set) ? [cards.slice()] : null
   }
-  if (specs.length !== 2 || cards.length > 16) return null
-  const full = (1 << cards.length) - 1
-  // The first card always goes in group A, which avoids testing mirror images.
-  for (let mask = 1; mask < full; mask += 2) {
-    const a: Card[] = []
-    const b: Card[] = []
-    cards.forEach((c, i) => ((mask >> i) & 1 ? a : b).push(c))
-    if (matchPhase(phaseIdx, [a, b])) return [a, b]
+  if (cards.length > 16) return null
+  // Try every way of dealing the cards into the groups. A card that cannot go in a group
+  // (a different number in a set, say) ends that branch at once, so this stays quick.
+  const groups: Card[][] = specs.map(() => [])
+  const place = (i: number): boolean => {
+    if (i === cards.length) {
+      return groups.every((g) => g.length > 0) && matchPhase(phaseIdx, groups, set) !== null
+    }
+    for (let k = 0; k < groups.length; k++) {
+      // The first card always goes in the first group that is still empty, which skips mirror images.
+      if (groups[k].length === 0 && groups.slice(0, k).some((g) => g.length === 0)) break
+      groups[k].push(cards[i])
+      // Groups are matched to the phase in any order, so test against the loosest rule they might get.
+      const fits = specs.some((sp) => mayJoin(sp, groups[k]))
+      if (fits && place(i + 1)) return true
+      groups[k].pop()
+    }
+    return false
   }
-  return null
+  return place(0) ? groups.map((g) => g.slice()) : null
 }
 
 export function* combinations<T>(items: readonly T[], k: number): Generator<T[]> {
@@ -351,16 +501,18 @@ export function findPhaseLayout(
   hand: readonly Card[],
   phaseIdx: number,
   table: readonly Meld[] = [],
+  set: PhaseSet = 'classic',
 ): Card[][] | null {
-  const specs = PHASES[phaseIdx]?.groups
+  const specs = defsOf(set)[phaseIdx]?.groups
   if (!specs) return null
   const playable = hand.filter((c) => c.kind !== 'skip')
+  const place = new Map(playable.map((c, i) => [c.id, i]))
   const search: { best: Layout | null } = { best: null }
   const chosen: Card[][] = []
 
   const recurse = (specIdx: number, remaining: Card[]) => {
     if (specIdx === specs.length) {
-      const bodies = matchPhase(phaseIdx, chosen)
+      const bodies = matchPhase(phaseIdx, chosen, set)
       if (!bodies) return
       const used = new Set(chosen.flat().map((c) => c.id))
       const rest = hand.filter((c) => !used.has(c.id))
@@ -376,7 +528,12 @@ export function findPhaseLayout(
       return
     }
     const spec = specs[specIdx]
+    // Two groups of the same kind are interchangeable, so only look at them in one order.
+    const prev = specIdx > 0 ? specs[specIdx - 1] : null
+    const twin = prev !== null && prev.kind === spec.kind && prev.size === spec.size && prev.parity === spec.parity
+    const floor = twin ? (place.get(chosen[specIdx - 1][0].id) ?? -1) : -1
     for (const combo of combinations(remaining, spec.size)) {
+      if (twin && (place.get(combo[0].id) ?? -1) < floor) continue
       if (!buildGroup(spec, combo)) continue
       chosen.push(combo)
       const ids = new Set(combo.map((c) => c.id))
@@ -392,77 +549,175 @@ export function findPhaseLayout(
   return search.best ? search.best.groups : null
 }
 
+/** The starting positions a run of this kind could have: every window of the right length in its line of numbers. */
+function runWindows(spec: GroupSpec): number[][] {
+  const line = valuesFor(spec.kind === 'parity' ? spec.parity : undefined)
+  const out: number[][] = []
+  for (let s = 0; s + spec.size <= line.length; s++) out.push(line.slice(s, s + spec.size))
+  return out
+}
+
+type Counts = number[][] // counts[value][colorIndex]
+
+/** Takes up to `want` cards of this number, from the colors it has the most of. Returns how many it took. */
+function takeNumber(counts: Counts, value: number, want: number, spare?: number): number {
+  const row = counts[value]
+  let took = 0
+  // `spare` is a color the caller would rather keep, so take from the other colors first.
+  const order = [0, 1, 2, 3].sort((a, b) => (a === spare ? 1 : 0) - (b === spare ? 1 : 0) || row[b] - row[a])
+  for (const k of order) {
+    while (took < want && row[k] > 0) {
+      row[k]--
+      took++
+    }
+  }
+  return took
+}
+
+/** How many cards of the window this hand has, one per number, using up the cards it counts. */
+function takeRun(counts: Counts, spec: GroupSpec, window: readonly number[], onlyColor?: number): number {
+  if (spec.kind === 'rainbow') return takeRainbow(counts, window, Math.floor(spec.size / 4))
+  let covered = 0
+  for (const v of window) {
+    const row = counts[v]
+    let pick = -1
+    for (let k = 0; k < 4; k++) {
+      if (row[k] <= 0) continue
+      if (onlyColor !== undefined && k !== onlyColor) continue
+      if (pick < 0 || row[k] > row[pick]) pick = k
+    }
+    if (pick < 0) continue
+    row[pick]--
+    covered++
+  }
+  return covered
+}
+
+/**
+ * For a run with the same number of cards of every color: how many numbers of the window can be
+ * covered by a card when no color may be used more than `cap` times. That is a matching problem,
+ * solved by trying to move an earlier choice aside whenever a color is full.
+ */
+function takeRainbow(counts: Counts, window: readonly number[], cap: number): number {
+  const owner: number[][] = [[], [], [], []] // for each color, the window positions using it
+  const tryPlace = (pos: number, seen: boolean[]): boolean => {
+    const row = counts[window[pos]]
+    for (let k = 0; k < 4; k++) {
+      if (row[k] <= 0 || seen[k]) continue
+      seen[k] = true
+      if (owner[k].length < cap) {
+        owner[k].push(pos)
+        return true
+      }
+      for (let m = 0; m < owner[k].length; m++) {
+        const other = owner[k][m]
+        owner[k].splice(m, 1)
+        if (tryPlace(other, seen)) {
+          owner[k].push(pos)
+          return true
+        }
+        owner[k].splice(m, 0, other)
+      }
+    }
+    return false
+  }
+  let covered = 0
+  for (let pos = 0; pos < window.length; pos++) if (tryPlace(pos, [false, false, false, false])) covered++
+  for (let k = 0; k < 4; k++) for (const pos of owner[k]) counts[window[pos]][k]--
+  return covered
+}
+
+const cloneCounts = (c: Counts): Counts => c.map((row) => row.slice())
+
+interface Option {
+  got: number
+  left: Counts
+}
+
+/** Every way one group could be filled from these counts: how many cards it uses, and what is left. */
+function optionsFor(spec: GroupSpec, counts: Counts): Option[] {
+  const out: Option[] = []
+  switch (spec.kind) {
+    case 'set':
+      for (let v = MIN_VALUE; v <= MAX_VALUE; v++) {
+        const left = cloneCounts(counts)
+        out.push({ got: takeNumber(left, v, spec.size), left })
+      }
+      break
+    case 'color':
+      // Which cards of the color to take matters when another group wants some of them, so also try
+      // leaving each number for last.
+      for (let k = 0; k < 4; k++) {
+        for (let keep = 0; keep <= MAX_VALUE; keep++) {
+          const left = cloneCounts(counts)
+          let got = 0
+          const order = ALL_VALUES.slice().sort((x, y) => (x === keep ? 1 : 0) - (y === keep ? 1 : 0) || x - y)
+          for (const v of order) {
+            while (got < spec.size && left[v][k] > 0) {
+              left[v][k]--
+              got++
+            }
+          }
+          out.push({ got, left })
+        }
+      }
+      break
+    case 'colorRun':
+      for (const w of runWindows(spec)) {
+        for (let k = 0; k < 4; k++) {
+          const left = cloneCounts(counts)
+          out.push({ got: takeRun(left, spec, w, k), left })
+        }
+      }
+      break
+    default:
+      for (const w of runWindows(spec)) {
+        const left = cloneCounts(counts)
+        out.push({ got: takeRun(left, spec, w), left })
+      }
+  }
+  return out
+}
+
+/**
+ * The most cards the groups can use between them. With one or two groups every choice is tried, so
+ * a set and a run that want the same card are sorted out properly. With more, each group in turn
+ * takes the most it can (biggest groups first), which is close enough for an estimate.
+ */
+function most(specs: readonly GroupSpec[], counts: Counts): number {
+  if (specs.length === 0) return 0
+  const [first, ...rest] = specs
+  const options = optionsFor(first, counts)
+  if (specs.length <= 2) {
+    let best = 0
+    for (const o of options) best = Math.max(best, o.got + most(rest, o.left))
+    return best
+  }
+  let pick = options[0]
+  for (const o of options) if (o.got > pick.got) pick = o
+  return pick.got + most(rest, pick.left)
+}
+
 /**
  * Cheap estimate of how many more cards are needed to complete the phase
  * (0 means the hand can lay down now). Wilds count as fillers for any gap.
- * This is a heuristic used for draw and discard decisions.
+ * This is a heuristic used for draw and discard decisions: the groups are
+ * filled one at a time, biggest first, each taking the most the hand can give it.
+ * A set that shares a number with a run (or colors with a color group) is
+ * tried in every combination, so the answer is not thrown off by order.
  */
-export function phaseMissing(hand: readonly Card[], phaseIdx: number): number {
-  const specs = PHASES[phaseIdx]?.groups
+export function phaseMissing(hand: readonly Card[], phaseIdx: number, set: PhaseSet = 'classic'): number {
+  const specs = defsOf(set)[phaseIdx]?.groups
   if (!specs) return 0
-  const total = specs.reduce((sum, g) => sum + g.size, 0)
+  const needed = specs.reduce((sum, g) => sum + g.size, 0)
 
-  const count = new Array<number>(MAX_VALUE + 1).fill(0)
-  const colorCount: Record<Color, number> = { red: 0, blue: 0, green: 0, yellow: 0 }
+  const counts: Counts = Array.from({ length: MAX_VALUE + 1 }, () => [0, 0, 0, 0])
   let wilds = 0
   for (const c of hand) {
     if (c.kind === 'wild') wilds++
-    else if (c.kind === 'number') {
-      count[c.value]++
-      colorCount[c.color]++
-    }
+    else if (c.kind === 'number') counts[c.value][COLORS.indexOf(c.color)]++
   }
 
-  let best = total
-  const consider = (naturals: number) => {
-    best = Math.min(best, Math.max(0, total - naturals - wilds))
-  }
-
-  const setSpecs = specs.filter((g) => g.kind === 'set')
-  const runSpec = specs.find((g) => g.kind === 'run')
-  const colorSpec = specs.find((g) => g.kind === 'color')
-
-  if (colorSpec) {
-    for (const c of COLORS) {
-      if (colorCount[c] < 1) continue
-      consider(Math.min(colorCount[c], colorSpec.size))
-    }
-  } else if (runSpec && setSpecs.length === 0) {
-    const n = runSpec.size
-    for (let s = MIN_VALUE; s + n - 1 <= MAX_VALUE; s++) {
-      let covered = 0
-      for (let v = s; v < s + n; v++) if (count[v] > 0) covered++
-      if (covered >= 1) consider(covered)
-    }
-  } else if (runSpec && setSpecs.length === 1) {
-    const k = setSpecs[0].size
-    const n = runSpec.size
-    for (let v = MIN_VALUE; v <= MAX_VALUE; v++) {
-      if (count[v] < 1) continue
-      const setCovered = Math.min(count[v], k)
-      for (let s = MIN_VALUE; s + n - 1 <= MAX_VALUE; s++) {
-        let runCovered = 0
-        for (let x = s; x < s + n; x++) {
-          const remaining = count[x] - (x === v ? setCovered : 0)
-          if (remaining > 0) runCovered++
-        }
-        if (runCovered >= 1) consider(setCovered + runCovered)
-      }
-    }
-  } else if (setSpecs.length === 2) {
-    const [a, b] = setSpecs
-    for (let v1 = MIN_VALUE; v1 <= MAX_VALUE; v1++) {
-      for (let v2 = MIN_VALUE; v2 <= MAX_VALUE; v2++) {
-        if (v1 === v2) {
-          if (count[v1] < 2) continue
-          consider(Math.min(count[v1], a.size + b.size))
-        } else {
-          if (count[v1] < 1 || count[v2] < 1) continue
-          consider(Math.min(count[v1], a.size) + Math.min(count[v2], b.size))
-        }
-      }
-    }
-  }
-
-  return best
+  const got = most(specs.slice().sort((x, y) => y.size - x.size), counts)
+  return Math.max(0, needed - got - wilds)
 }
