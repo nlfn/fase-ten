@@ -69,14 +69,14 @@ A fourth mode, Fase Ten spelled backwards. Everyone starts on Phase 10 and works
 
 A second list of ten phases, chosen on the welcome screen (`phaseSet: 'alternate'` on the game state). It works with every ordering above. Easiest first:
 
-1. 4 sets of 2
-2. 3 runs of 3
-3. 2 runs of 4
-4. 5 cards of one color + 1 set of 3
+1. 5 cards of one color + 1 set of 3
+2. 1 run of 4 with 1 of each color + 1 set of 3
+3. 2 sets of 3 + 1 set of 2
+4. 1 set of 4 + 2 sets of 2
 5. 1 run of 6 evens + 1 set of 2
 6. 1 run of 5 odds + 1 set of 3
-7. 1 run of 8 with 2 of each color
-8. 3 sets of 3
+7. 1 run of 4 in one color + 1 set of 3
+8. 1 run of 8 with 2 of each color
 9. 1 run of 10
 10. 1 run of 6 in one color
 
@@ -84,10 +84,10 @@ New kinds of group (all in `phases.ts`):
 
 - **Run of evens or odds** steps by two. A run of five evens is 2 to 10 or 4 to 12 and can grow by the next even number at either end. A run of six evens (2 to 12) or odds (1 to 11) is complete and takes no hits, not even a Wild.
 - **Run in one color** only takes cards of that color (or a Wild) when hit.
-- **Run with two of each color** is checked when laid down (no color more than twice, Wilds fill the gaps). Afterwards it is an ordinary run, so any color can be added.
-- A phase can have up to four groups (4 sets of 2).
+- **Run with some of each color** (one of each in a run of four, two of each in a run of eight) is checked when laid down, with Wilds filling the gaps. Afterwards it is an ordinary run, so any color can be added.
+- A phase can have up to four groups.
 
-Difficulty order comes from simulated games (`phaseSet` in the engine, scripts not kept in the repo). With three Expert bots at a table where everyone is on a random phase, about 5,000 rounds, the share of players who laid down before the round ended was: 4 sets of 2 91%, 3 runs of 3 and 2 runs of 4 78%, color plus set 76%, evens 65%, odds 64%, rainbow 52%, 3 sets of 3 52%, run of 10 46%, run of 6 in one color 35%. For comparison the classic phases range from 92% (set of 3 + run of 4) to 46% (2 sets of 4, and 5 + 3). Three other candidates were tried and left out because they sat too close to these: 1 run of 5 evens + 1 set of 2 (75%), 1 run of 6 odds + 1 set of 3 (50%) and 1 run of 5 evens + 1 set of 4 (43%). Swapping a phase means editing `ALTERNATE_ORDER` in `phases.ts`.
+How the ten were chosen: all 21 candidates in `ALTERNATE_CANDIDATES` were simulated with three Expert bots at a table where everyone is on a random phase (about 6,000 rounds). The measure is the share of players who laid down before the round ended. The first version of the list ran from 91% (4 sets of 2) down to 35% (a run of 6 in one color), and its early phases ended rounds in two or three turns, so the list was rebuilt to climb evenly. The ten above score about 79, 75, 74, 67, 66, 63, 60, 51, 49 and 37%, and the first four rounds last about 4 to 5 turns instead of 2 to 4. Classic ranges from 92% to 46%. The run of 6 in one color is kept as Phase 10 on purpose: it is the hardest, and right after the run of 10 (whoever lays that down goes out at once), so the last rounds have a single person going out rather than the same player repeatedly ending the round on someone who is already on the last phase. Swapping a phase means editing `ALTERNATE_ORDER`.
 
 ## Computer players
 

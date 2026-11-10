@@ -13,6 +13,12 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 18,
+    date: '2026-11-09',
+    title: 'Alternate phases rebalanced',
+    body: 'The first few alternate phases were too easy and rounds ended in a couple of turns, while the last ones were brutal (especially Backwards). The alternate list is now a steadier climb, from a color group plus a set up to a run of ten, with the run of six in one color kept as the last phase, and the early rounds last longer. A game of Alternate that was already under way will show the new phases from the next screen.',
+  },
+  {
     id: 17,
     date: '2026-11-09',
     title: 'Alternate phases',
