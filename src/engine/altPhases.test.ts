@@ -14,7 +14,7 @@ import {
   phaseMissing,
   runEndsFor,
 } from './phases'
-import type { Meld, PhaseSet } from './phases'
+import type { Meld, PhaseSet, RunBody } from './phases'
 import { applyAction, createGame, nextRound, upgradeSavedState } from './game'
 import type { GameState } from './game'
 import { createBot } from './bot'
@@ -28,7 +28,7 @@ const at = (text: string) => {
   if (i < 0) throw new Error(`no candidate called ${text}`)
   return i
 }
-const meld = (body: NonNullable<ReturnType<typeof buildRun>>): Meld => ({ ...body, id: 1, owner: 0 })
+const meld = (body: RunBody): Meld & RunBody => ({ ...body, id: 1, owner: 0 })
 
 describe('runs of evens and odds', () => {
   it('accepts consecutive evens or odds and nothing else', () => {
