@@ -29,7 +29,7 @@ import { PHASE_COUNT, canHit, findPhaseLayout, phaseMissing, phaseSize } from '.
 import type { RunEnd } from './phases'
 import { createHitPlanner, lite, withHit } from './hitPlan'
 import { currentPlayer, hitTargets, topDiscard } from './game'
-import { targetPhase } from './game'
+import { isSittingOut, targetPhase } from './game'
 import type { Action, GameState, Player } from './game'
 
 export type BotLevel = 'easy' | 'medium' | 'expert'
@@ -222,7 +222,7 @@ export function createBot(level: BotLevel = 'expert', random: () => number = Mat
     let bestScore = -Infinity
     let bestPoints = Infinity
     state.players.forEach((p, i) => {
-      if (i === state.current || p.skipsPending > 0) return
+      if (i === state.current || p.skipsPending > 0 || isSittingOut(state, i)) return
       // Someone who has laid down and is nearly out is the one to stop. This outweighs everything else.
       const nearOut = p.laidDown && p.hand.length <= 2
       const closing = p.laidDown && p.hand.length <= 4

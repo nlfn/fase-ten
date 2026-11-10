@@ -35,6 +35,8 @@
   const savedSummary = $derived.by(() => {
     if (!saved) return ''
     const me = saved.state.players[0]
+    if (saved.state.tiebreak) return 'Tiebreaker for the win'
+    if (saved.state.tieNext) return 'Tiebreaker about to begin'
     if (saved.state.mode === 'yousee') {
       return `You Pick, round ${saved.state.round}, ${me.phase} of 10 phases done`
     }
@@ -158,7 +160,8 @@
         <li>You only get credit for a phase if you laid it down.</li>
         <li>
           <strong>Winning:</strong> the game ends when a player completes their last phase. If more than one
-          player completes theirs in the same round, the lowest score wins.
+          player completes theirs in the same round, the lowest score wins. A tie is settled by a tiebreaker round:
+          the tied players repeat their final phase and the first one out wins.
         </li>
       </ul>
       <ol class="phases">

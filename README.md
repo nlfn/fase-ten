@@ -45,7 +45,7 @@ The engine is the important part. Everything a player does is an action (`drawDe
 - Going out can happen by hitting or discarding your last card.
 - A discarded Skip makes the chosen player lose their next turn. Skips do not stack: a player who is already losing a turn cannot be skipped again. If the first card turned up is a Skip, the first player loses their turn.
 - Cards left in hand: 1 to 9 are 5 points, 10 to 12 are 10, Skip is 15, Wild is 25. The player who goes out scores 0.
-- You advance only if you laid down your phase. Finish Phase 10 to end the game; if several players finish in the same round, the lowest score wins.
+- You advance only if you laid down your phase. Finish Phase 10 to end the game; if several players finish in the same round, the lowest score wins. If the lowest score is tied and at least one person is among the tied players, they play a tiebreaker: each repeats their final phase in a fresh round (everyone else sits out), and the first to go out wins. No points are added. If only computer players are tied, the winner is drawn at random from the game's seed instead. In the engine this is `tieNext` (a pending tiebreaker) and `tiebreak` (the tied players while it is being played) on the game state.
 
 Choices where the official rules are loose or where I picked a house rule:
 

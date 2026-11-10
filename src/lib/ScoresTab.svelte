@@ -9,7 +9,7 @@
 
   const history = $derived(game.scoreHistory ?? [])
   // Games saved before scores were recorded are missing their earlier rounds.
-  const finishedRounds = $derived(game.status === 'playing' ? game.round - 1 : game.round)
+  const finishedRounds = $derived(game.status === 'playing' && !game.tiebreak ? game.round - 1 : game.round)
   const missing = $derived(Math.max(0, finishedRounds - history.length))
 
   const totals = $derived(game.players.map((p) => p.score))
