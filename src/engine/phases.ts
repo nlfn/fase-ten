@@ -106,14 +106,14 @@ export const ALTERNATE_CANDIDATES: readonly PhaseDef[] = [
  * once, and the run of six in one color (about 37%) is the capstone, where only one player can go out.
  */
 const ALTERNATE_ORDER = [
-  '5 of one color + 1 set of 3',
-  '1 rainbow run of 4 + 1 set of 3',
   '2 sets of 3 + 1 set of 2',
-  '1 set of 4 + 2 sets of 2',
-  '1 run of 6 evens + 1 set of 2',
-  '1 run of 5 odds + 1 set of 3',
-  '1 color run of 4 + 1 set of 3',
+  '1 run of 5 evens + 1 set of 3',
+  '2 color runs of 3',
   '1 rainbow run of 8',
+  '1 run of 6 odds + 1 set of 3',
+  '3 sets of 3',
+  '1 run of 6, no Wilds',
+  '1 rainbow run of 4 + 1 set of 4',
   '1 run of 10',
   '1 color run of 6',
 ]
