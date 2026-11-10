@@ -89,6 +89,8 @@ export const ALTERNATE_CANDIDATES: readonly PhaseDef[] = [
   { number: 0, groups: [pureRun(7)], description: '1 run of 7, no Wilds' },
   { number: 0, groups: [pureRun(8)], description: '1 run of 8, no Wilds' },
   { number: 0, groups: [pureRun(9)], description: '1 run of 9, no Wilds' },
+  { number: 0, groups: [color(6), set(3)], description: '6 of one color + 1 set of 3' },
+  { number: 0, groups: [color(6), set(2)], description: '6 of one color + 1 set of 2' },
 ]
 
 /**
