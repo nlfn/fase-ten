@@ -244,3 +244,20 @@ describe('a game using the alternate phases', () => {
     }
   })
 })
+
+describe('a run with no Wilds', () => {
+  const p = () => ALTERNATE_CANDIDATES.findIndex((c) => c.description === '1 run of 7, no Wilds')
+
+  it('cannot be laid down with a Wild, and the estimate does not count Wilds', () => {
+    expect(matchPhase(p(), [nums(1, 2, 3, 4, 5, 6, 7)], LAB)).not.toBeNull()
+    expect(matchPhase(p(), [[...nums(1, 2, 3, 4, 5, 6), wild()]], LAB)).toBeNull()
+    expect(phaseMissing([...nums(1, 2, 3, 4, 5), wild(), wild()], p(), LAB)).toBe(2)
+    expect(findPhaseLayout([...nums(1, 2, 3, 4, 5, 6), wild(), wild()], p(), [], LAB)).toBeNull()
+    expect(arrangeSelection([...nums(1, 2, 3, 4, 5, 6), wild()], p(), LAB)).toBeNull()
+  })
+
+  it('is a plain run once it is down, so a Wild can be added', () => {
+    const m = meld(buildRun(nums(1, 2, 3, 4, 5, 6, 7), 7)!)
+    expect(canHit(m, wild())).toBe(true)
+  })
+})

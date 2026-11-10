@@ -13,6 +13,12 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 20,
+    date: '2026-11-10',
+    title: 'New alternate phase list',
+    body: 'The alternate phases are different again, with a harder start. Phase 1 is now 2 sets of 3 and a set of 2, and the list adds 3 sets of 3, 2 color runs of 3, a run of 5 evens and a set of 3, a run of 6 odds and a set of 3, a rainbow run of 4 and a set of 4, and a run of 6 with no Wilds (a Wild cannot be used to lay it down, only to add to groups on the table, so toss them or watch who picks them up). The run of 10 is still second to last and the color run of 6 still last. A game of Alternate that was already under way will show the new phases from the next screen.',
+  },
+  {
     id: 19,
     date: '2026-11-09',
     title: 'Phases table fits four players',

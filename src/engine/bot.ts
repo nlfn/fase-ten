@@ -25,7 +25,7 @@
 
 import { cardPoints } from './cards'
 import type { Card } from './cards'
-import { PHASE_COUNT, canHit, findPhaseLayout, phaseMissing, phaseSize } from './phases'
+import { PHASE_COUNT, allowsWilds, canHit, findPhaseLayout, phaseMissing, phaseSize } from './phases'
 import type { RunEnd } from './phases'
 import { createHitPlanner, lite, withHit } from './hitPlan'
 import { currentPlayer, hitTargets, topDiscard } from './game'
@@ -260,8 +260,10 @@ export function createBot(level: BotLevel = 'expert', random: () => number = Mat
       return { type: 'discard', cardId: skipCard.id, skipTarget: chooseSkipTarget(state) }
     }
 
-    // Keep Wilds unless there is nothing else to throw.
-    let candidates: Card[] = hand.filter((c) => c.kind !== 'wild')
+    // Keep Wilds unless there is nothing else to throw. The exception is a phase that cannot use Wilds at all:
+    // until the player has laid down, a Wild there is only 25 points of dead weight.
+    const wildsHelp = me.laidDown || openPhases(state, me).some((i) => allowsWilds(i, state.phaseSet))
+    let candidates: Card[] = wildsHelp ? hand.filter((c) => c.kind !== 'wild') : hand.slice()
     if (candidates.length === 0) candidates = hand.slice()
 
     // An opponent who has laid down can add cards to any group on the table.

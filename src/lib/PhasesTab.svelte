@@ -90,7 +90,7 @@
   {#if game.mode !== 'yousee'}<span><b class="now">▸</b> working on it</span>{/if}
 </p>
 {#if game.phaseSet === 'alternate'}
-  <p class="legend"><span>Rainbow run: the same number of each color. Color run: all one color.</span></p>
+  <p class="legend"><span>Rainbow run: the same number of each color. Color run: all one color. No Wilds: a Wild cannot help lay it down.</span></p>
 {/if}
 
 <style>
