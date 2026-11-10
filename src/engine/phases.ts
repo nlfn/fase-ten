@@ -81,6 +81,8 @@ export const ALTERNATE_CANDIDATES: readonly PhaseDef[] = [
   { number: 0, groups: [set(4), set(2), set(2)], description: '1 set of 4 + 2 sets of 2' },
   { number: 0, groups: [evens(5), set(3)], description: '1 run of 5 evens + 1 set of 3' },
   { number: 0, groups: [rainbow(4), set(4)], description: '1 rainbow run of 4 + 1 set of 4' },
+  { number: 0, groups: [colorRun(3), colorRun(3)], description: '2 color runs of 3' },
+  { number: 0, groups: [colorRun(3), colorRun(3), colorRun(3)], description: '3 color runs of 3' },
 ]
 
 /**
