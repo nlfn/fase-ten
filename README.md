@@ -70,8 +70,8 @@ A fourth mode, Fase Ten spelled backwards. Everyone starts on Phase 10 and works
 A second list of ten phases, chosen on the welcome screen (`phaseSet: 'alternate'` on the game state). It works with every ordering above. Easiest first:
 
 1. 2 sets of 3 + 1 set of 2
-2. 1 run of 5 evens + 1 set of 3
-3. 2 color runs of 3
+2. 2 color runs of 3
+3. 1 run of 5 evens + 1 set of 3
 4. 1 rainbow run of 8
 5. 1 run of 6 odds + 1 set of 3
 6. 3 sets of 3
@@ -88,7 +88,7 @@ New kinds of group (all in `phases.ts`):
 - **Run of 6, no Wilds** cannot be laid down with a Wild in it. Wilds are only useful for adding to groups already on the table, so bots discard them before laying down (`allowsWilds`). Hitting with a Wild afterwards is allowed.
 - A phase can have up to four groups.
 
-How the ten were chosen: the candidates in `ALTERNATE_CANDIDATES` (about 40 of them) were simulated with three Expert bots at a table where everyone is on a random phase (several thousand rounds each). The measure is the share of players who laid down before the round ended. The ten above score about 85, 74, 71, 64, 64, 63, 63, 61, 63 and 48% (Easy bots: 85, 70, 75, 67, 59, 61, 62, 60, 56 and 48%), and the opener takes about 3 to 4 turns to lay down instead of 2. Classic ranges from 92% to 46%. The run of 6 in one color is kept as Phase 10 on purpose: it is the hardest, and right after the run of 10 (whoever lays that down goes out at once), so the last rounds have a single person going out rather than the same player repeatedly ending the round on someone who is already on the last phase. Swapping a phase means editing `ALTERNATE_ORDER`.
+How the ten were chosen: the candidates in `ALTERNATE_CANDIDATES` (about 40 of them) were simulated with three Expert bots at a table where everyone is on a random phase (several thousand rounds each). The measure is the share of players who laid down before the round ended. The ten above score about 85, 71, 74, 64, 64, 63, 63, 61, 63 and 48% (Easy bots: 85, 75, 70, 67, 59, 61, 62, 60, 56 and 48%), and the opener takes about 3 to 4 turns to lay down instead of 2. Classic ranges from 92% to 46%. The run of 6 in one color is kept as Phase 10 on purpose: it is the hardest, and right after the run of 10 (whoever lays that down goes out at once), so the last rounds have a single person going out rather than the same player repeatedly ending the round on someone who is already on the last phase. Swapping a phase means editing `ALTERNATE_ORDER`.
 
 ## Computer players
 

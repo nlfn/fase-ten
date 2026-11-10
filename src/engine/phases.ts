@@ -107,8 +107,8 @@ export const ALTERNATE_CANDIDATES: readonly PhaseDef[] = [
  */
 const ALTERNATE_ORDER = [
   '2 sets of 3 + 1 set of 2',
-  '1 run of 5 evens + 1 set of 3',
   '2 color runs of 3',
+  '1 run of 5 evens + 1 set of 3',
   '1 rainbow run of 8',
   '1 run of 6 odds + 1 set of 3',
   '3 sets of 3',
