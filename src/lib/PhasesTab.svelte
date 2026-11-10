@@ -40,12 +40,13 @@
         : 'Players work through the phases in order.'}
 </p>
 <div>
-  <table>
+  {#snippet text(part: string)}{#each part.split(/(rainbow)/) as chunk, c (c)}{#if chunk === 'rainbow'}{#each chunk.split('') as ch, k (k)}<span class={'rb' + (k % 4)}>{ch}</span>{/each}{:else}{chunk}{/if}{/each}{/snippet}
+<table>
     <thead>
       <tr>
         <th scope="col">Phase</th>
         {#each game.players as p, i (i)}
-          <th scope="col" class="who">{p.name}</th>
+          <th scope="col" class="who" title={p.name}>{p.name}</th>
         {/each}
       </tr>
     </thead>
@@ -58,7 +59,7 @@
               <span class="num">{phase.number}</span>
               <span class="desc">
                 {#each parts as part, i (i)}
-                  <span class:keep={parts.length > 1}>{part}{i < parts.length - 1 ? ' +' : ''}</span>{' '}
+                  <span class:keep={parts.length > 1}>{@render text(part)}{i < parts.length - 1 ? ' +' : ''}</span>{' '}
                 {/each}
               </span>
             </div>
@@ -88,8 +89,15 @@
   <span><b class="laid">●</b> laid down this round</span>
   {#if game.mode !== 'yousee'}<span><b class="now">▸</b> working on it</span>{/if}
 </p>
+{#if game.phaseSet === 'alternate'}
+  <p class="legend"><span>Rainbow run: the same number of each color. Color run: all one color.</span></p>
+{/if}
 
 <style>
+  .rb0 { color: #ff6b5e; }
+  .rb1 { color: #ffd84d; }
+  .rb2 { color: #7ff0a6; }
+  .rb3 { color: #6ea8ff; }
   table {
     width: 100%;
     border-collapse: collapse;
@@ -110,7 +118,7 @@
     background: var(--felt);
     box-shadow: inset 0 -1px 0 rgb(255 255 255 / 0.15);
     border-bottom: 0;
-    font-size: 0.8rem;
+    font-size: 0.76rem;
     color: var(--text-dim);
     font-weight: 700;
   }
@@ -120,21 +128,35 @@
     text-align: left;
   }
   .who {
-    max-width: 5.5rem;
-    overflow-wrap: break-word; /* keep a name like Karla on one line, only split very long ones */
+    max-width: 3.6rem;
+    overflow: hidden;
+    text-overflow: ellipsis; /* a long name is cut with ... so four players always fit on a phone */
+    white-space: nowrap;
   }
   tbody th {
     font-weight: 600;
-    font-size: 0.88rem;
+    font-size: 0.84rem;
   }
   .label {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.4rem;
     align-items: baseline;
   }
   /* When a phase has two groups, a wrap falls between them, so each group's number stays with it. */
   .keep {
     white-space: nowrap;
+  }
+  /* On a narrow phone with four players there is no room to keep a whole group on one line. */
+  @media (max-width: 399px) {
+    .keep {
+      white-space: normal;
+    }
+  }
+  @media (max-width: 440px) {
+    th,
+    td {
+      padding-inline: 0.15rem;
+    }
   }
   .num {
     flex: none;

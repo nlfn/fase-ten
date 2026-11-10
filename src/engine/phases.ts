@@ -62,11 +62,11 @@ export const ALTERNATE_CANDIDATES: readonly PhaseDef[] = [
   { number: 0, groups: [set(3), set(3), set(3)], description: '3 sets of 3' },
   { number: 0, groups: [run(4), run(4)], description: '2 runs of 4' },
   { number: 0, groups: [run(3), run(3), run(3)], description: '3 runs of 3' },
-  { number: 0, groups: [color(5), set(3)], description: '5 cards of one color + 1 set of 3' },
+  { number: 0, groups: [color(5), set(3)], description: '5 of one color + 1 set of 3' },
   { number: 0, groups: [evens(6), set(2)], description: '1 run of 6 evens + 1 set of 2' },
   { number: 0, groups: [odds(6), set(3)], description: '1 run of 6 odds + 1 set of 3' },
-  { number: 0, groups: [colorRun(6)], description: '1 run of 6 in one color' },
-  { number: 0, groups: [rainbow(8)], description: '1 run of 8 with 2 of each color' },
+  { number: 0, groups: [colorRun(6)], description: '1 color run of 6' },
+  { number: 0, groups: [rainbow(8)], description: '1 rainbow run of 8' },
   { number: 0, groups: [run(10)], description: '1 run of 10' },
   { number: 0, groups: [evens(5), set(4)], description: '1 run of 5 evens + 1 set of 4' },
   { number: 0, groups: [odds(5), set(3)], description: '1 run of 5 odds + 1 set of 3' },
@@ -75,8 +75,8 @@ export const ALTERNATE_CANDIDATES: readonly PhaseDef[] = [
   { number: 0, groups: [set(3), run(6)], description: '1 set of 3 + 1 run of 6' },
   { number: 0, groups: [run(5), run(4)], description: '1 run of 5 + 1 run of 4' },
   { number: 0, groups: [colorRun(5), set(2)], description: '1 run of 5 in one color + 1 set of 2' },
-  { number: 0, groups: [colorRun(4), set(3)], description: '1 run of 4 in one color + 1 set of 3' },
-  { number: 0, groups: [rainbow(4), set(3)], description: '1 run of 4 with 1 of each color + 1 set of 3' },
+  { number: 0, groups: [colorRun(4), set(3)], description: '1 color run of 4 + 1 set of 3' },
+  { number: 0, groups: [rainbow(4), set(3)], description: '1 rainbow run of 4 + 1 set of 3' },
   { number: 0, groups: [set(3), set(3), set(2)], description: '2 sets of 3 + 1 set of 2' },
   { number: 0, groups: [set(4), set(2), set(2)], description: '1 set of 4 + 2 sets of 2' },
 ]
@@ -90,16 +90,16 @@ export const ALTERNATE_CANDIDATES: readonly PhaseDef[] = [
  * once, and the run of six in one color (about 37%) is the capstone, where only one player can go out.
  */
 const ALTERNATE_ORDER = [
-  '5 cards of one color + 1 set of 3',
-  '1 run of 4 with 1 of each color + 1 set of 3',
+  '5 of one color + 1 set of 3',
+  '1 rainbow run of 4 + 1 set of 3',
   '2 sets of 3 + 1 set of 2',
   '1 set of 4 + 2 sets of 2',
   '1 run of 6 evens + 1 set of 2',
   '1 run of 5 odds + 1 set of 3',
-  '1 run of 4 in one color + 1 set of 3',
-  '1 run of 8 with 2 of each color',
+  '1 color run of 4 + 1 set of 3',
+  '1 rainbow run of 8',
   '1 run of 10',
-  '1 run of 6 in one color',
+  '1 color run of 6',
 ]
 
 export const ALTERNATE_PHASES: readonly PhaseDef[] = ALTERNATE_ORDER.map((description, i) => {
