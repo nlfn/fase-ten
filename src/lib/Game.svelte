@@ -66,6 +66,7 @@
 
   const HUMAN = 0
   const yousee = $derived(game.mode === 'yousee')
+  const single = $derived(game.mode === 'single')
   const me = $derived(game.players[HUMAN])
   // The phase you are working on in classic and random games (0 once you have finished them all).
   const myTarget = $derived(targetPhase(game, me) ?? 0)
@@ -411,6 +412,7 @@
 
   /** The short progress line shown in a player's panel. */
   function progress(p: GameState['players'][number]): string {
+    if (single) return 'Single round'
     if (yousee) return `${p.phase} of ${PHASE_COUNT} done`
     const label = phaseLabel(targetPhase(game, p) ?? PHASE_COUNT)
     // Once a round is over, a player who finished their phase has already moved on to the next one.
@@ -420,6 +422,7 @@
   /** What a player is after right now, shown under their stats. */
   function goalLine(p: GameState['players'][number]): string {
     if (p.laidDown && p.laidPhase !== null) {
+      if (single) return `Laid down: ${phaseDescription(p.laidPhase, game.phaseSet)}`
       return `Laid down Phase ${p.laidPhase + 1}: ${phaseDescription(p.laidPhase, game.phaseSet)}`
     }
     if (yousee) return ''
@@ -455,8 +458,10 @@
 
 <div class="table" class:has-bar={resultHidden && game.status !== 'playing'}>
   <header class="bar">
-    <h1>{game.tiebreak ? 'Tiebreaker' : `Round ${game.round}`}</h1>
-    {#if me.laidDown && me.laidPhase !== null}
+    <h1>{game.tiebreak ? 'Tiebreaker' : single ? 'Single round' : `Round ${game.round}`}</h1>
+    {#if single}
+      <p class="goal">{phaseDescription(myTarget, game.phaseSet)}</p>
+    {:else if me.laidDown && me.laidPhase !== null}
       <p class="goal"><strong>Phase {me.laidPhase + 1}</strong> {phaseDescription(me.laidPhase, game.phaseSet)}</p>
     {:else if yousee}
       <p class="goal"><strong>Your choice</strong> {me.phase} of {PHASE_COUNT} phases done</p>
@@ -699,7 +704,9 @@
                 <td>{game.roundResult?.tie?.how === 'round' && game.status === 'gameOver' ? '-' : (game.roundResult?.points[i] ?? 0)}</td>
                 <td>{p.score}</td>
                 <td>
-                  {#if game.status === 'gameOver'}
+                  {#if single}
+                    {game.roundResult?.completed[i] ? 'Laid down' : 'Did not lay down'}
+                  {:else if game.status === 'gameOver'}
                     {p.phase >= PHASE_COUNT ? 'Finished' : progress(p)}
                   {:else if game.tieNext}
                     {@const entry = game.tieNext.find((e) => e.player === i)}
@@ -709,7 +716,7 @@
                   {:else}
                     {phaseLabel(targetPhase(game, p) ?? PHASE_COUNT)}{game.roundResult?.completed[i] ? '' : ' (repeat)'}
                   {/if}
-                  {#if game.roundResult?.completed[i] && p.laidPhase !== null}
+                  {#if !single && game.roundResult?.completed[i] && p.laidPhase !== null}
                     <span class="sub">Completed Phase {p.laidPhase + 1}</span>
                   {/if}
                 </td>

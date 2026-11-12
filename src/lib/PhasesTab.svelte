@@ -30,6 +30,11 @@
   }
 </script>
 
+{#if game.mode === 'single'}
+  <p>
+    Single round: {phases[0].description}. Whoever goes out first scores zero and wins. Use Quit to stop at any time.
+  </p>
+{:else}
 <p>
   {game.mode === 'yousee'
     ? 'Each player can complete the phases in any order, once each.'
@@ -91,6 +96,7 @@
 </p>
 {#if game.phaseSet === 'alternate'}
   <p class="legend"><span>Rainbow run: the same number of each color. Color run: all one color. No Wilds: a Wild cannot help lay it down.</span></p>
+{/if}
 {/if}
 
 <style>

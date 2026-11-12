@@ -1,6 +1,6 @@
 // Saves the game in the browser so a refresh or a closed tab does not lose it.
 
-import { upgradeSavedState } from '../engine'
+import { decodeGroups, upgradeSavedState } from '../engine'
 import type { BotLevel, GameMode, GameState, PhaseSet } from '../engine'
 
 const KEY = 'fase-ten:session:v1'
@@ -66,6 +66,10 @@ export interface Settings {
   level: BotLevel
   mode: GameMode
   phaseSet: PhaseSet
+  /** Single round chosen on the welcome screen. mode and phaseSet keep the settings for the normal game. */
+  single: boolean
+  /** Phase code (see encodeGroups) for the single round. */
+  singlePhase: string
 }
 
 /** Checks a stored value field by field; anything missing or odd is left out. */
@@ -79,6 +83,8 @@ export function parseSettings(raw: unknown): Partial<Settings> {
   if (level) out.level = level
   if (r.mode === 'classic' || r.mode === 'yousee' || r.mode === 'random' || r.mode === 'reverse') out.mode = r.mode
   if (r.phaseSet === 'classic' || r.phaseSet === 'alternate') out.phaseSet = r.phaseSet
+  if (typeof r.single === 'boolean') out.single = r.single
+  if (typeof r.singlePhase === 'string' && decodeGroups(r.singlePhase)) out.singlePhase = r.singlePhase
   return out
 }
 

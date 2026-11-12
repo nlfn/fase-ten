@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { phasesOf, targetPhase } from '../engine'
-  import type { BotLevel, GameMode, PhaseSet } from '../engine'
+  import { ALTERNATE_CANDIDATES, ALTERNATE_PHASES, PHASES, encodeGroups, phasesOf, phaseDescription, targetPhase } from '../engine'
+  import type { BotLevel, GameMode, GroupSpec, PhaseSet } from '../engine'
   import UpdateBanner from './UpdateBanner.svelte'
   import WhatsNew from './WhatsNew.svelte'
   import { loadSettings, saveSettings } from './storage'
@@ -27,8 +27,26 @@
   let name = $state(last.name ?? 'You')
   let opponents = $state<1 | 2 | 3>(last.opponents ?? 1)
   let level = $state<BotLevel>(last.level ?? 'medium')
-  let mode = $state<GameMode>(last.mode ?? 'classic')
-  let phaseSet = $state<PhaseSet>(last.phaseSet ?? 'classic')
+  let mode = $state<Exclude<GameMode, 'single'>>(last.mode && last.mode !== 'single' ? last.mode : 'classic')
+  let phaseKind = $state<'classic' | 'alternate' | 'single'>(last.single ? 'single' : last.phaseSet === 'alternate' ? 'alternate' : 'classic')
+  const phaseSet = $derived<PhaseSet>(phaseKind === 'alternate' ? 'alternate' : 'classic')
+  let singlePhase = $state(last.singlePhase ?? encodeGroups(PHASES[0].groups))
+
+  // Every phase that can be played as a single round: the two lists first, then the other ideas.
+  const singleChoices = (() => {
+    const seen = new Set<string>()
+    const group = (label: string, defs: readonly { groups: readonly GroupSpec[]; description: string }[]) => {
+      const options = defs
+        .map((d) => ({ code: encodeGroups(d.groups), description: d.description }))
+        .filter((o) => !seen.has(o.code) && (seen.add(o.code), true))
+      return { label, options }
+    }
+    return [
+      group('Classic phases', PHASES),
+      group('Alternate phases', ALTERNATE_PHASES),
+      group('More ideas', ALTERNATE_CANDIDATES),
+    ].filter((g) => g.options.length > 0)
+  })()
   let showChanges = $state(false)
 
   // The date and time are shown in the viewer's own time zone.
@@ -42,6 +60,7 @@
     if (saved.state.mode === 'yousee') {
       return `You Pick, round ${saved.state.round}, ${me.phase} of 10 phases done`
     }
+    if (saved.state.mode === 'single') return `Single round: ${phaseDescription(0, saved.state.phaseSet)}`
     const target = targetPhase(saved.state, me)
     const label =
       saved.state.mode === 'random' ? 'Random, round' : saved.state.mode === 'reverse' ? 'Backwards, round' : 'Round'
@@ -50,9 +69,16 @@
 
   function submit(event: SubmitEvent) {
     event.preventDefault()
-    const config: GameConfig = { name: name.trim() || 'You', opponents, level, mode, phaseSet }
-    saveSettings(config)
-    onStart(config)
+    const single = phaseKind === 'single'
+    const trimmed = name.trim() || 'You'
+    saveSettings({ name: trimmed, opponents, level, mode, phaseSet, single, singlePhase })
+    onStart({
+      name: trimmed,
+      opponents,
+      level,
+      mode: single ? 'single' : mode,
+      phaseSet: single ? `single:${singlePhase}` : phaseSet,
+    })
   }
 </script>
 
@@ -82,20 +108,38 @@
 
     <fieldset>
       <legend>Phases</legend>
-      <div class="segment wide">
-        <label><input type="radio" name="phaseSet" value="classic" bind:group={phaseSet} /><span>Classic</span></label>
-        <label><input type="radio" name="phaseSet" value="alternate" bind:group={phaseSet} /><span>Alternate</span></label>
+      <div class="segment three">
+        <label><input type="radio" name="phaseKind" value="classic" bind:group={phaseKind} /><span>Classic</span></label>
+        <label><input type="radio" name="phaseKind" value="alternate" bind:group={phaseKind} /><span>Alternate</span></label>
+        <label><input type="radio" name="phaseKind" value="single" bind:group={phaseKind} /><span>Single round</span></label>
       </div>
+      {#if phaseKind === 'single'}
+        <label class="field pick">
+          <span class="sr">Phase to play</span>
+          <select bind:value={singlePhase}>
+            {#each singleChoices as grp (grp.label)}
+              <optgroup label={grp.label}>
+                {#each grp.options as o (o.code)}
+                  <option value={o.code}>{o.description}</option>
+                {/each}
+              </optgroup>
+            {/each}
+          </select>
+        </label>
+      {/if}
       <p class="hint">
-        {#if phaseSet === 'classic'}
+        {#if phaseKind === 'classic'}
           The ten phases from the card game.
-        {:else}
+        {:else if phaseKind === 'alternate'}
           Ten different phases: runs of evens or odds, runs in one color, runs with two of every color, and more.
           The list is under How to play.
+        {:else}
+          Play just one round on any phase from the lists. Whoever goes out first scores zero and wins. Quit any time.
         {/if}
       </p>
     </fieldset>
 
+    {#if phaseKind !== 'single'}
     <fieldset>
       <legend>Fase Ordering</legend>
       <div class="segment wide">
@@ -116,6 +160,7 @@
         {/if}
       </p>
     </fieldset>
+    {/if}
 
     <fieldset>
       <legend>Computer players</legend>
@@ -169,6 +214,10 @@
         <strong>Backwards:</strong> everyone starts on Phase 10 and works down to Phase 1. Miss your phase and you
         try it again next round, the same as the classic game.
       </p>
+      <p>
+        <strong>Single round:</strong> pick one phase and play a single round of it. Whoever goes out first has no
+        cards left to count, scores zero, and wins. There is no next round, so Quit whenever you like.
+      </p>
       <ul>
         <li><strong>Set:</strong> cards with the same number.</li>
         <li><strong>Run:</strong> cards in number order, any colors. No wrapping from 12 to 1.</li>
@@ -182,11 +231,13 @@
           the tied players repeat their final phase and the first one out wins.
         </li>
       </ul>
-      <ol class="phases">
-        {#each phasesOf(phaseSet) as phase (phase.number)}
-          <li>{phase.description}</li>
-        {/each}
-      </ol>
+      {#if phaseKind !== 'single'}
+        <ol class="phases">
+          {#each phasesOf(phaseSet) as phase (phase.number)}
+            <li>{phase.description}</li>
+          {/each}
+        </ol>
+      {/if}
     </div>
   </details>
 
@@ -315,6 +366,26 @@
     color: var(--text-dim);
     font-size: 0.9rem;
     min-height: 2.6em;
+  }
+  .pick select {
+    font: inherit;
+    width: 100%;
+    padding: 0.75rem 0.9rem;
+    border-radius: 0.7rem;
+    border: 2px solid transparent;
+    background: var(--felt-deep);
+    color: var(--text);
+  }
+  .pick select:focus-visible {
+    outline: none;
+    border-color: var(--gold);
+  }
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
   .big {
     padding: 1rem;

@@ -65,6 +65,10 @@ A third mode. Like classic, but each player has their own secret random order fo
 
 A fourth mode, Fase Ten spelled backwards. Everyone starts on Phase 10 and works down to Phase 1, one phase at a time, and a missed phase is tried again next round. In the engine this is `mode: 'reverse'`: every player's `order` is the plain order reversed, so `targetPhase` does the rest.
 
+### Single round
+
+A fifth way to play, picked under Phases on the welcome screen: one round on one phase from any list (classic, alternate, or the other candidates), with a picker. The game is over when the round ends, and whoever went out scores zero and wins. In the engine this is `mode: 'single'` with `phaseSet: 'single:<code>'`. The code spells out the groups of the phase (`s3-s3` is 2 sets of 3, `r4-s3` a run of 4 and a set of 3, `e5` a run of 5 evens, `k6` a color run of 6, `b8` a rainbow run of 8, `p6` a run of 6 with no Wilds, `c7` 7 of one color, `o` for odds), so a saved game needs no lookup table. `encodeGroups`, `decodeGroups`, `describeGroups` and `groupsProblem` in `phases.ts` convert and check these codes. All ten slots hold that one phase and every player starts on the last one with the others marked done, so the existing "finish the last phase" rule ends the game.
+
 ### Alternate phases
 
 A second list of ten phases, chosen on the welcome screen (`phaseSet: 'alternate'` on the game state). It works with every ordering above. Easiest first:

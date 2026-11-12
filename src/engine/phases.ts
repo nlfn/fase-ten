@@ -25,8 +25,11 @@ export interface GroupSpec {
   parity?: Parity
 }
 
-/** Which list of ten phases a game uses. */
-export type PhaseSet = 'classic' | 'alternate'
+/**
+ * Which list of ten phases a game uses. 'single:<code>' is a single round: all ten slots hold the one phase
+ * that the code describes (see encodeGroups), so a game can be saved and restored from the string alone.
+ */
+export type PhaseSet = 'classic' | 'alternate' | `single:${string}`
 
 export interface PhaseDef {
   number: number
@@ -129,8 +132,128 @@ export const PHASE_SETS: Record<string, readonly PhaseDef[]> = {
   alternate: ALTERNATE_PHASES,
 }
 
+// ---------------------------------------------------------------------------
+// Phases as text. A code such as "s3-s3" or "r4-s3" lists the groups of one phase, which lets a single
+// round (and later a custom phase) live inside a saved game or a shared link without a lookup table.
+// ---------------------------------------------------------------------------
+
+const KIND_LETTER: Record<GroupKind, string> = { set: 's', run: 'r', color: 'c', parity: 'e', colorRun: 'k', rainbow: 'b', pureRun: 'p' }
+
+/** The most cards a phase can ask for: one hand. */
+export const HAND_LIMIT = 10
+export const MAX_GROUPS = 4
+
+export function encodeGroups(groups: readonly GroupSpec[]): string {
+  return groups
+    .map((g) => (g.kind === 'parity' ? (g.parity === 'odd' ? 'o' : 'e') : KIND_LETTER[g.kind]) + g.size)
+    .join('-')
+}
+
+/** Why a list of groups cannot be a phase, or null when it can. */
+export function groupsProblem(groups: readonly GroupSpec[]): string | null {
+  if (groups.length === 0) return 'Add at least one group'
+  if (groups.length > MAX_GROUPS) return `A phase can have at most ${MAX_GROUPS} groups`
+  let total = 0
+  for (const g of groups) {
+    total += g.size
+    if (!Number.isInteger(g.size) || g.size < 2) return 'Every group needs at least 2 cards'
+    switch (g.kind) {
+      case 'set':
+        break
+      case 'run':
+      case 'colorRun':
+      case 'pureRun':
+        if (g.size > MAX_VALUE - MIN_VALUE + 1) return `A run can be at most ${MAX_VALUE - MIN_VALUE + 1} cards`
+        break
+      case 'color':
+        break
+      case 'parity':
+        if (g.size > 6) return 'A run of evens or odds can be at most 6 cards'
+        break
+      case 'rainbow':
+        if (g.size % 4 !== 0) return 'A rainbow run needs a multiple of 4 cards (the same number of each color)'
+        if (g.size > MAX_VALUE - MIN_VALUE + 1) return `A run can be at most ${MAX_VALUE - MIN_VALUE + 1} cards`
+        break
+    }
+  }
+  if (total > HAND_LIMIT) return `A hand is only ${HAND_LIMIT} cards, so a phase can ask for at most ${HAND_LIMIT}`
+  return null
+}
+
+export function decodeGroups(code: string): GroupSpec[] | null {
+  const specs: GroupSpec[] = []
+  for (const part of code.split('-')) {
+    const m = /^([screkbpo])(\d{1,2})$/.exec(part)
+    if (!m) return null
+    const size = Number(m[2])
+    switch (m[1]) {
+      case 's': specs.push({ kind: 'set', size }); break
+      case 'c': specs.push({ kind: 'color', size }); break
+      case 'k': specs.push({ kind: 'colorRun', size }); break
+      case 'b': specs.push({ kind: 'rainbow', size }); break
+      case 'p': specs.push({ kind: 'pureRun', size }); break
+      case 'e': specs.push({ kind: 'parity', size, parity: 'even' }); break
+      case 'o': specs.push({ kind: 'parity', size, parity: 'odd' }); break
+      default: specs.push({ kind: 'run', size })
+    }
+  }
+  return groupsProblem(specs) === null ? specs : null
+}
+
+const KNOWN: ReadonlyMap<string, string> = new Map(
+  [...PHASES, ...ALTERNATE_CANDIDATES].map((d) => [encodeGroups(d.groups), d.description]),
+)
+
+function plural(n: number, one: string, many: string): string {
+  return n === 1 ? `1 ${one}` : `${n} ${many}`
+}
+
+/** Plain-English name for a phase, such as "2 sets of 3 + 1 set of 2". */
+export function describeGroups(groups: readonly GroupSpec[]): string {
+  const known = KNOWN.get(encodeGroups(groups))
+  if (known) return known
+  const parts: string[] = []
+  for (let i = 0; i < groups.length; ) {
+    let j = i
+    while (j < groups.length && encodeGroups([groups[j]]) === encodeGroups([groups[i]])) j++
+    const g = groups[i]
+    const n = j - i
+    switch (g.kind) {
+      case 'set': parts.push(`${plural(n, 'set', 'sets')} of ${g.size}`); break
+      case 'run': parts.push(`${plural(n, 'run', 'runs')} of ${g.size}`); break
+      case 'parity': parts.push(`${plural(n, 'run', 'runs')} of ${g.size} ${g.parity === 'odd' ? 'odds' : 'evens'}`); break
+      case 'colorRun': parts.push(`${plural(n, 'color run', 'color runs')} of ${g.size}`); break
+      case 'rainbow': parts.push(`${plural(n, 'rainbow run', 'rainbow runs')} of ${g.size}`); break
+      case 'pureRun': parts.push(`${plural(n, 'run', 'runs')} of ${g.size}, no Wilds`); break
+      case 'color': parts.push(n === 1 ? `${g.size} of one color` : `${n} groups of ${g.size} of one color`); break
+    }
+    i = j
+  }
+  return parts.join(' + ')
+}
+
+const singleCache = new Map<string, readonly PhaseDef[]>()
+
+/** The ten identical slots of a single round game, or null if the code is not a valid phase. */
+function singleDefs(code: string): readonly PhaseDef[] | null {
+  const cached = singleCache.get(code)
+  if (cached) return cached
+  const groups = decodeGroups(code)
+  if (!groups) return null
+  const description = describeGroups(groups)
+  const defs = Array.from({ length: PHASE_COUNT }, (_, i): PhaseDef => ({ number: i + 1, groups, description }))
+  singleCache.set(code, defs)
+  return defs
+}
+
 function defsOf(set: string): readonly PhaseDef[] {
+  if (set.startsWith('single:')) return singleDefs(set.slice(7)) ?? PHASES
   return PHASE_SETS[set] ?? PHASES
+}
+
+/** True when the set string is a valid phase set for a game (a known list, or a single round with a good code). */
+export function isPhaseSet(set: string): set is PhaseSet {
+  return set === 'classic' || set === 'alternate' || (set.startsWith('single:') && singleDefs(set.slice(7)) !== null)
 }
 
 export function phasesOf(set: PhaseSet): readonly PhaseDef[] {

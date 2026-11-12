@@ -13,6 +13,12 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 21,
+    date: '2026-11-12',
+    title: 'Single round',
+    body: 'A new Single round choice on the welcome screen lets you play one round on any phase from the classic list, the alternate list, or the other ideas we tried. Whoever goes out first has no cards left, scores zero, and wins. There is no next round, and Quit stops it any time.',
+  },
+  {
     id: 20,
     date: '2026-11-10',
     title: 'New alternate phase list',
