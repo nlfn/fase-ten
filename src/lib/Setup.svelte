@@ -1,10 +1,19 @@
 <script lang="ts">
-  import { ALTERNATE_CANDIDATES, ALTERNATE_PHASES, PHASES, encodeGroups, phasesOf, phaseDescription, targetPhase } from '../engine'
+  import { ALTERNATE_CANDIDATES, ALTERNATE_PHASES, PHASES, decodeGroups, describeGroups, encodeGroups, phasesOf, phaseDescription, targetPhase } from '../engine'
   import type { BotLevel, GameMode, GroupSpec, PhaseSet } from '../engine'
   import UpdateBanner from './UpdateBanner.svelte'
   import WhatsNew from './WhatsNew.svelte'
-  import { loadSettings, saveSettings } from './storage'
-  import type { Session } from './storage'
+  import Designer from './Designer.svelte'
+  import {
+    MAX_SAVED_PHASES,
+    loadDesign,
+    loadSavedPhases,
+    loadSettings,
+    saveDesign,
+    saveSavedPhases,
+    saveSettings,
+  } from './storage'
+  import type { SavedPhase, Session } from './storage'
 
   export interface GameConfig {
     name: string
@@ -30,14 +39,49 @@
   let mode = $state<Exclude<GameMode, 'single'>>(last.mode && last.mode !== 'single' ? last.mode : 'classic')
   let phaseKind = $state<'classic' | 'alternate' | 'single'>(last.single ? 'single' : last.phaseSet === 'alternate' ? 'alternate' : 'classic')
   const phaseSet = $derived<PhaseSet>(phaseKind === 'alternate' ? 'alternate' : 'classic')
-  let singlePhase = $state(last.singlePhase ?? encodeGroups(PHASES[0].groups))
+  // A link such as ?phase=s3-r4 opens on that phase as a single round.
+  const linked = (() => {
+    try {
+      const code = new URLSearchParams(location.search).get('phase')
+      if (code && decodeGroups(code)) {
+        history.replaceState(null, '', location.pathname)
+        return code
+      }
+    } catch {
+      // No address to read in some test setups.
+    }
+    return null
+  })()
+  let singlePhase = $state(linked ?? loadDesign() ?? last.singlePhase ?? encodeGroups(PHASES[0].groups))
+  if (linked) phaseKind = 'single'
 
-  // Every phase that can be played as a single round: the two lists first, then the other ideas.
-  const singleChoices = (() => {
+  // The phase last picked is remembered even if no game is started, so a design is still there tomorrow.
+  $effect(() => saveDesign(singlePhase))
+
+  let myPhases = $state<SavedPhase[]>(loadSavedPhases())
+  let designing = $state(false)
+
+  function savePhase(label: string, code: string) {
+    const key = label.trim().toLowerCase()
+    const existing = myPhases.find((p) => p.name.toLowerCase() === key)
+    const next = existing
+      ? myPhases.map((p) => (p === existing ? { ...p, code } : p))
+      : [...myPhases, { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, name: label.trim(), code }]
+    myPhases = next.slice(-MAX_SAVED_PHASES)
+    saveSavedPhases(myPhases)
+  }
+  function deletePhase(id: string) {
+    myPhases = myPhases.filter((p) => p.id !== id)
+    saveSavedPhases(myPhases)
+  }
+
+  // Every phase that can be played as a single round: the player's own first, then the two lists, then the
+  // other ideas. A phase that is on none of them (a design in progress, or one from a link) gets a group of its own.
+  const listChoices = (() => {
     const seen = new Set<string>()
     const group = (label: string, defs: readonly { groups: readonly GroupSpec[]; description: string }[]) => {
       const options = defs
-        .map((d) => ({ code: encodeGroups(d.groups), description: d.description }))
+        .map((d) => ({ key: encodeGroups(d.groups), code: encodeGroups(d.groups), description: d.description }))
         .filter((o) => !seen.has(o.code) && (seen.add(o.code), true))
       return { label, options }
     }
@@ -47,6 +91,17 @@
       group('More ideas', ALTERNATE_CANDIDATES),
     ].filter((g) => g.options.length > 0)
   })()
+  const singleChoices = $derived.by(() => {
+    const mine = {
+      label: 'My phases',
+      options: myPhases.map((p) => ({ key: p.id, code: p.code, description: p.name })),
+    }
+    const known = new Set([...mine.options, ...listChoices.flatMap((g) => g.options)].map((o) => o.code))
+    const extra = known.has(singlePhase)
+      ? []
+      : [{ label: 'Current design', options: [{ key: 'current', code: singlePhase, description: describeGroups(decodeGroups(singlePhase) ?? []) }] }]
+    return [...extra, ...(mine.options.length > 0 ? [mine] : []), ...listChoices]
+  })
   let showChanges = $state(false)
 
   // The date and time are shown in the viewer's own time zone.
@@ -111,21 +166,24 @@
       <div class="segment three">
         <label><input type="radio" name="phaseKind" value="classic" bind:group={phaseKind} /><span>Classic</span></label>
         <label><input type="radio" name="phaseKind" value="alternate" bind:group={phaseKind} /><span>Alternate</span></label>
-        <label><input type="radio" name="phaseKind" value="single" bind:group={phaseKind} /><span>Single round</span></label>
+        <label><input type="radio" name="phaseKind" value="single" bind:group={phaseKind} /><span>Single</span></label>
       </div>
       {#if phaseKind === 'single'}
-        <label class="field pick">
-          <span class="sr">Phase to play</span>
-          <select bind:value={singlePhase}>
-            {#each singleChoices as grp (grp.label)}
-              <optgroup label={grp.label}>
-                {#each grp.options as o (o.code)}
-                  <option value={o.code}>{o.description}</option>
-                {/each}
-              </optgroup>
-            {/each}
-          </select>
-        </label>
+        <div class="pickrow">
+          <label class="field pick">
+            <span class="sr">Phase to play</span>
+            <select bind:value={singlePhase}>
+              {#each singleChoices as grp (grp.label)}
+                <optgroup label={grp.label}>
+                  {#each grp.options as o (o.key)}
+                    <option value={o.code}>{o.description}</option>
+                  {/each}
+                </optgroup>
+              {/each}
+            </select>
+          </label>
+          <button type="button" class="ghost design" onclick={() => (designing = true)}>Design</button>
+        </div>
       {/if}
       <p class="hint">
         {#if phaseKind === 'classic'}
@@ -134,7 +192,7 @@
           Ten different phases: runs of evens or odds, runs in one color, runs with two of every color, and more.
           The list is under How to play.
         {:else}
-          Play just one round on any phase from the lists. Whoever goes out first scores zero and wins. Quit any time.
+          Play just one round on any phase from the lists, or design your own. Whoever goes out first scores zero and wins. Quit any time.
         {/if}
       </p>
     </fieldset>
@@ -192,6 +250,17 @@
     <button type="submit" class="primary big">Start game</button>
   </form>
 
+  {#if designing}
+    <Designer
+      code={singlePhase}
+      saved={myPhases}
+      onChange={(c) => (singlePhase = c)}
+      onSave={savePhase}
+      onDelete={deletePhase}
+      onClose={() => (designing = false)}
+    />
+  {/if}
+
   <details class="rules">
     <summary>How to play</summary>
     <div class="rules-body">
@@ -215,7 +284,11 @@
         try it again next round, the same as the classic game.
       </p>
       <p>
-        <strong>Single round:</strong> pick one phase and play a single round of it. Whoever goes out first has no
+        <strong>No Wilds:</strong> in phases marked no Wilds, a Wild cannot help lay that group down. It can still be
+        added to the group once it is on the table, or discarded so the next player cannot use it.
+      </p>
+      <p>
+        <strong>Single:</strong> pick one phase, or design your own, and play a single round of it. Whoever goes out first has no
         cards left to count, scores zero, and wins. There is no next round, so Quit whenever you like.
       </p>
       <ul>
@@ -366,6 +439,18 @@
     color: var(--text-dim);
     font-size: 0.9rem;
     min-height: 2.6em;
+  }
+  .pickrow {
+    display: flex;
+    gap: 0.5rem;
+    align-items: stretch;
+  }
+  .pickrow .pick {
+    flex: 1;
+    min-width: 0;
+  }
+  .design {
+    padding: 0.5rem 0.9rem;
   }
   .pick select {
     font: inherit;

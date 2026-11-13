@@ -13,9 +13,9 @@ import type { Card, Color, NumberCard } from './cards'
  * parity: a run that only uses even or odd numbers, stepping by two (a "run of six evens" is 2, 4, 6, 8, 10, 12).
  * colorRun: a run where every card is the same color.
  * rainbow: a run with the same number of cards of each color (size / 4). Once laid it is a plain run.
- * pureRun: a run made only of number cards. No Wilds can be used to lay it down (they can still be added afterwards).
+ * Any group can also be marked noWild: no Wilds can be used to lay it down (they can still be added afterwards).
  */
-export type GroupKind = 'set' | 'run' | 'color' | 'parity' | 'colorRun' | 'rainbow' | 'pureRun'
+export type GroupKind = 'set' | 'run' | 'color' | 'parity' | 'colorRun' | 'rainbow'
 
 export type Parity = 'even' | 'odd'
 
@@ -23,6 +23,8 @@ export interface GroupSpec {
   kind: GroupKind
   size: number
   parity?: Parity
+  /** True when no Wilds may be used to lay this group down. */
+  noWild?: boolean
 }
 
 /**
@@ -44,7 +46,7 @@ const evens = (size: number): GroupSpec => ({ kind: 'parity', size, parity: 'eve
 const odds = (size: number): GroupSpec => ({ kind: 'parity', size, parity: 'odd' })
 const colorRun = (size: number): GroupSpec => ({ kind: 'colorRun', size })
 const rainbow = (size: number): GroupSpec => ({ kind: 'rainbow', size })
-const pureRun = (size: number): GroupSpec => ({ kind: 'pureRun', size })
+const pureRun = (size: number): GroupSpec => ({ kind: 'run', size, noWild: true })
 
 export const PHASES: readonly PhaseDef[] = [
   { number: 1, groups: [set(3), set(3)], description: '2 sets of 3' },
@@ -137,7 +139,7 @@ export const PHASE_SETS: Record<string, readonly PhaseDef[]> = {
 // round (and later a custom phase) live inside a saved game or a shared link without a lookup table.
 // ---------------------------------------------------------------------------
 
-const KIND_LETTER: Record<GroupKind, string> = { set: 's', run: 'r', color: 'c', parity: 'e', colorRun: 'k', rainbow: 'b', pureRun: 'p' }
+const KIND_LETTER: Record<GroupKind, string> = { set: 's', run: 'r', color: 'c', parity: 'e', colorRun: 'k', rainbow: 'b' }
 
 /** The most cards a phase can ask for: one hand. */
 export const HAND_LIMIT = 10
@@ -145,7 +147,7 @@ export const MAX_GROUPS = 4
 
 export function encodeGroups(groups: readonly GroupSpec[]): string {
   return groups
-    .map((g) => (g.kind === 'parity' ? (g.parity === 'odd' ? 'o' : 'e') : KIND_LETTER[g.kind]) + g.size)
+    .map((g) => (g.kind === 'parity' ? (g.parity === 'odd' ? 'o' : 'e') : KIND_LETTER[g.kind]) + g.size + (g.noWild ? 'n' : ''))
     .join('-')
 }
 
@@ -159,10 +161,10 @@ export function groupsProblem(groups: readonly GroupSpec[]): string | null {
     if (!Number.isInteger(g.size) || g.size < 2) return 'Every group needs at least 2 cards'
     switch (g.kind) {
       case 'set':
+        if (g.noWild && g.size > 8) return 'A set with no Wilds can be at most 8 cards (there are 8 of each number)'
         break
       case 'run':
       case 'colorRun':
-      case 'pureRun':
         if (g.size > MAX_VALUE - MIN_VALUE + 1) return `A run can be at most ${MAX_VALUE - MIN_VALUE + 1} cards`
         break
       case 'color':
@@ -183,19 +185,21 @@ export function groupsProblem(groups: readonly GroupSpec[]): string | null {
 export function decodeGroups(code: string): GroupSpec[] | null {
   const specs: GroupSpec[] = []
   for (const part of code.split('-')) {
-    const m = /^([screkbpo])(\d{1,2})$/.exec(part)
+    const m = /^([screkbpo])(\d{1,2})(n?)$/.exec(part)
     if (!m) return null
     const size = Number(m[2])
+    // 'p' (a run with no Wilds) is how the first single round codes spelled it.
+    const noWild = m[3] === 'n' || m[1] === 'p'
     switch (m[1]) {
       case 's': specs.push({ kind: 'set', size }); break
       case 'c': specs.push({ kind: 'color', size }); break
       case 'k': specs.push({ kind: 'colorRun', size }); break
       case 'b': specs.push({ kind: 'rainbow', size }); break
-      case 'p': specs.push({ kind: 'pureRun', size }); break
       case 'e': specs.push({ kind: 'parity', size, parity: 'even' }); break
       case 'o': specs.push({ kind: 'parity', size, parity: 'odd' }); break
       default: specs.push({ kind: 'run', size })
     }
+    if (noWild) specs[specs.length - 1].noWild = true
   }
   return groupsProblem(specs) === null ? specs : null
 }
@@ -224,9 +228,9 @@ export function describeGroups(groups: readonly GroupSpec[]): string {
       case 'parity': parts.push(`${plural(n, 'run', 'runs')} of ${g.size} ${g.parity === 'odd' ? 'odds' : 'evens'}`); break
       case 'colorRun': parts.push(`${plural(n, 'color run', 'color runs')} of ${g.size}`); break
       case 'rainbow': parts.push(`${plural(n, 'rainbow run', 'rainbow runs')} of ${g.size}`); break
-      case 'pureRun': parts.push(`${plural(n, 'run', 'runs')} of ${g.size}, no Wilds`); break
       case 'color': parts.push(n === 1 ? `${g.size} of one color` : `${n} groups of ${g.size} of one color`); break
     }
+    if (g.noWild) parts[parts.length - 1] += ', no Wilds'
     i = j
   }
   return parts.join(' + ')
@@ -262,7 +266,7 @@ export function phasesOf(set: PhaseSet): readonly PhaseDef[] {
 
 /** Whether Wilds can help lay this phase down. False when every group is a run with no Wilds. */
 export function allowsWilds(phaseIdx: number, set: PhaseSet = 'classic'): boolean {
-  return !(defsOf(set)[phaseIdx]?.groups ?? []).every((g) => g.kind === 'pureRun')
+  return !(defsOf(set)[phaseIdx]?.groups ?? []).every((g) => g.noWild)
 }
 
 /** How many cards the phase asks for in total. */
@@ -402,6 +406,7 @@ export function buildColor(cards: readonly Card[], minSize: number): ColorBody |
 }
 
 export function buildGroup(spec: GroupSpec, cards: readonly Card[]): MeldBody | null {
+  if (spec.noWild && cards.some((c) => c.kind === 'wild')) return null
   switch (spec.kind) {
     case 'set':
       return buildSet(cards, spec.size)
@@ -415,8 +420,6 @@ export function buildGroup(spec: GroupSpec, cards: readonly Card[]): MeldBody | 
       return buildRun(cards, spec.size, { sameColor: true })
     case 'rainbow':
       return buildRainbow(cards, spec.size)
-    case 'pureRun':
-      return cards.some((c) => c.kind === 'wild') ? null : buildRun(cards, spec.size)
   }
 }
 
@@ -528,15 +531,13 @@ export function hitMeld(meld: Meld, card: Card, end?: RunEnd): boolean {
 
 /** Could these cards still end up in a group of this kind? Used to cut off hopeless splits early. */
 function mayJoin(spec: GroupSpec, cards: readonly Card[]): boolean {
+  if (spec.noWild && cards.some((c) => c.kind === 'wild')) return false
   const naturals = cards.filter((c): c is NumberCard => c.kind === 'number')
   switch (spec.kind) {
     case 'set':
       return naturals.every((c) => c.value === naturals[0].value)
     case 'color':
       return naturals.every((c) => c.color === naturals[0].color)
-    case 'pureRun':
-      if (cards.some((c) => c.kind === 'wild')) return false
-      break
     case 'colorRun':
       if (!naturals.every((c) => c.color === naturals[0].color)) return false
       break
@@ -689,7 +690,7 @@ export function findPhaseLayout(
     const spec = specs[specIdx]
     // Two groups of the same kind are interchangeable, so only look at them in one order.
     const prev = specIdx > 0 ? specs[specIdx - 1] : null
-    const twin = prev !== null && prev.kind === spec.kind && prev.size === spec.size && prev.parity === spec.parity
+    const twin = prev !== null && prev.kind === spec.kind && prev.size === spec.size && prev.parity === spec.parity && !!prev.noWild === !!spec.noWild
     const floor = twin ? (place.get(chosen[specIdx - 1][0].id) ?? -1) : -1
     for (const combo of combinations(remaining, spec.size)) {
       if (twin && (place.get(combo[0].id) ?? -1) < floor) continue
@@ -878,7 +879,11 @@ export function phaseMissing(hand: readonly Card[], phaseIdx: number, set: Phase
   }
 
   const got = most(specs.slice().sort((x, y) => y.size - x.size), counts)
-  // Wilds only help with groups that allow them.
-  const fillers = specs.every((g) => g.kind === 'pureRun') ? 0 : wilds
-  return Math.max(0, needed - got - fillers)
+  // Wilds only help with groups that allow them. The groups that do not are counted first, as if they get
+  // first pick of the naturals, and whatever they are still short of is a gap no Wild can close.
+  const strict = specs.filter((g) => g.noWild)
+  if (strict.length === 0) return Math.max(0, needed - got - wilds)
+  const strictSize = strict.reduce((sum, g) => sum + g.size, 0)
+  const strictGap = Math.min(needed - got, strictSize - most(strict.slice().sort((x, y) => y.size - x.size), counts))
+  return Math.max(0, strictGap + Math.max(0, needed - got - strictGap - wilds))
 }

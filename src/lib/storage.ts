@@ -104,3 +104,63 @@ export function saveSettings(settings: Settings): void {
     // Not being able to remember the choices is not worth interrupting the game.
   }
 }
+
+// ---------------------------------------------------------------------------
+// Phases the player has designed: a named list, and the phase last picked for a single round.
+// ---------------------------------------------------------------------------
+
+export interface SavedPhase {
+  id: string
+  name: string
+  /** The phase as a code (see encodeGroups). */
+  code: string
+}
+
+const PHASES_KEY = 'fase-ten:custom-phases:v1'
+const DESIGN_KEY = 'fase-ten:design:v1'
+export const MAX_SAVED_PHASES = 40
+
+export function loadSavedPhases(): SavedPhase[] {
+  try {
+    const raw = localStorage.getItem(PHASES_KEY)
+    if (!raw) return []
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    const out: SavedPhase[] = []
+    for (const item of parsed) {
+      const r = item as Record<string, unknown>
+      if (typeof r?.id === 'string' && typeof r.name === 'string' && typeof r.code === 'string' && decodeGroups(r.code)) {
+        out.push({ id: r.id, name: r.name.slice(0, 60), code: r.code })
+      }
+    }
+    return out.slice(0, MAX_SAVED_PHASES)
+  } catch {
+    return []
+  }
+}
+
+export function saveSavedPhases(list: readonly SavedPhase[]): void {
+  try {
+    localStorage.setItem(PHASES_KEY, JSON.stringify(list))
+  } catch {
+    // Not being able to remember a design is not worth interrupting anything.
+  }
+}
+
+/** The phase last chosen for a single round, so a design is still there tomorrow. */
+export function loadDesign(): string | null {
+  try {
+    const raw = localStorage.getItem(DESIGN_KEY)
+    return raw && decodeGroups(raw) ? raw : null
+  } catch {
+    return null
+  }
+}
+
+export function saveDesign(code: string): void {
+  try {
+    localStorage.setItem(DESIGN_KEY, code)
+  } catch {
+    // Same as above.
+  }
+}
