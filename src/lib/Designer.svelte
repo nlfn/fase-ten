@@ -16,26 +16,30 @@
 
   let { code: startCode, saved, onChange, onSave, onDelete, onClose }: Props = $props()
 
-  type Choice = 'set' | 'run' | 'color' | 'even' | 'odd' | 'colorRun' | 'rainbow'
+  type Choice = 'set' | 'run' | 'even' | 'odd' | 'rainbow' | 'any'
 
   const CHOICES: { id: Choice; label: string }[] = [
     { id: 'set', label: 'Set' },
     { id: 'run', label: 'Run' },
-    { id: 'color', label: 'All one color' },
     { id: 'even', label: 'Run of evens' },
     { id: 'odd', label: 'Run of odds' },
-    { id: 'colorRun', label: 'Run in one color' },
     { id: 'rainbow', label: 'Rainbow run' },
+    { id: 'any', label: 'Any cards' },
   ]
 
   const choiceOf = (g: GroupSpec): Choice =>
-    g.kind === 'parity' ? (g.parity === 'odd' ? 'odd' : 'even') : g.kind
+    g.kind === 'parity' ? (g.parity === 'odd' ? 'odd' : 'even') : g.kind === 'colorRun' ? 'run' : g.kind === 'color' ? 'any' : g.kind
+  /** A run in one color and a group of any cards in one color are their own kinds, so they count as one color here. */
+  const oneColorOf = (g: GroupSpec) => g.kind === 'colorRun' || g.kind === 'color' || !!g.oneColor
 
-  function specOf(choice: Choice, size: number, noWild: boolean): GroupSpec {
+  function specOf(choice: Choice, size: number, oneColor: boolean, noWild: boolean): GroupSpec {
     let spec: GroupSpec
     if (choice === 'even' || choice === 'odd') spec = { kind: 'parity', size: Math.min(size, 6), parity: choice === 'odd' ? 'odd' : 'even' }
     else if (choice === 'rainbow') spec = { kind: 'rainbow', size: Math.max(4, Math.round(size / 4) * 4) }
-    else spec = { kind: choice, size }
+    else if (choice === 'any') spec = { kind: 'color', size }
+    else if (choice === 'run') spec = { kind: oneColor ? 'colorRun' : 'run', size }
+    else spec = { kind: 'set', size }
+    if (oneColor && (choice === 'set' || choice === 'even' || choice === 'odd')) spec.oneColor = true
     if (noWild) spec.noWild = true
     return spec
   }
@@ -60,7 +64,11 @@
     groups = groups.map((g, k) => (k === i ? patch(g) : g))
   }
   function setChoice(i: number, choice: Choice) {
-    change(i, (g) => specOf(choice, g.size, !!g.noWild))
+    // Any cards is always one color, so leaving it starts again with the switch off.
+    change(i, (g) => specOf(choice, g.size, g.kind === 'color' ? false : oneColorOf(g), !!g.noWild))
+  }
+  function toggleOneColor(i: number) {
+    change(i, (g) => specOf(choiceOf(g), g.size, !oneColorOf(g), !!g.noWild))
   }
   function bump(i: number, direction: 1 | -1) {
     change(i, (g) => {
@@ -153,10 +161,17 @@
               <button class="ghost" onclick={() => bump(i, 1)} aria-label="More cards">+</button>
             </div>
             <label class="nowild">
+              <input type="checkbox" checked={oneColorOf(g)} disabled={g.kind === 'rainbow' || g.kind === 'color'} onchange={() => toggleOneColor(i)} />
+              <span>One color</span>
+            </label>
+            <label class="nowild">
               <input type="checkbox" checked={!!g.noWild} onchange={() => toggleNoWild(i)} />
               <span>No Wilds</span>
             </label>
           </div>
+          {#if g.kind === 'set' && g.oneColor && g.size > 2 && !g.noWild}
+            <p class="hint">There are only 2 of each card in a color, so a one-color set of {g.size} needs Wilds.</p>
+          {/if}
         </li>
       {/each}
     </ul>
@@ -275,6 +290,17 @@
     outline: none;
     border-color: var(--gold);
   }
+  .group .row {
+    flex-wrap: wrap;
+  }
+  .row .nowild:first-of-type {
+    margin-left: auto;
+  }
+  .hint {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+  }
   .stepper {
     display: flex;
     align-items: center;
@@ -291,7 +317,6 @@
     font-size: 1.1rem;
   }
   .nowild {
-    margin-left: auto;
     display: flex;
     align-items: center;
     gap: 0.5rem;
