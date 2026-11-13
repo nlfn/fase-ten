@@ -241,9 +241,9 @@ export function describeGroups(groups: readonly GroupSpec[]): string {
       case 'parity': parts.push(`${plural(n, 'run', 'runs')} of ${g.size} ${g.parity === 'odd' ? 'odds' : 'evens'}`); break
       case 'colorRun': parts.push(`${plural(n, 'run', 'runs')} of ${g.size}`); break
       case 'rainbow': parts.push(`${plural(n, 'rainbow run', 'rainbow runs')} of ${g.size}`); break
-      case 'color': parts.push(n === 1 ? `${g.size} cards` : `${n} groups of ${g.size} cards`); break
+      case 'color': parts.push(n === 1 ? `${g.size} of one color` : `${n} groups of ${g.size} of one color`); break
     }
-    const notes = [g.oneColor || g.kind === 'colorRun' || g.kind === 'color' ? 'one color' : '', g.noWild ? 'no wilds' : ''].filter(Boolean)
+    const notes = [g.oneColor || g.kind === 'colorRun' ? 'one color' : '', g.noWild ? 'no wilds' : ''].filter(Boolean)
     if (notes.length > 0) parts[parts.length - 1] += ` (${notes.join(', ')})`
     i = j
   }

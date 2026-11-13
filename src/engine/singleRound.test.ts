@@ -33,7 +33,7 @@ describe('phases as text', () => {
     expect(describeGroups([g('set', 2), g('set', 2), g('run', 3)])).toBe('2 sets of 2 + 1 run of 3')
     expect(describeGroups([g('parity', 4, 'odd'), g('rainbow', 4)])).toBe('1 run of 4 odds + 1 rainbow run of 4')
     expect(describeGroups([g('colorRun', 4), g('colorRun', 4)])).toBe('2 runs of 4 (one color)')
-    expect(describeGroups([g('color', 3), g('set', 3), g('set', 3)])).toBe('3 cards (one color) + 2 sets of 3')
+    expect(describeGroups([g('color', 3), g('set', 3), g('set', 3)])).toBe('3 of one color + 2 sets of 3')
   })
 
   it('rejects phases that cannot be played', () => {

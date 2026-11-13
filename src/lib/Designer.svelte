@@ -24,12 +24,12 @@
     { id: 'even', label: 'Run of evens' },
     { id: 'odd', label: 'Run of odds' },
     { id: 'rainbow', label: 'Rainbow run' },
-    { id: 'any', label: 'Any cards' },
+    { id: 'any', label: 'All one color' },
   ]
 
   const choiceOf = (g: GroupSpec): Choice =>
     g.kind === 'parity' ? (g.parity === 'odd' ? 'odd' : 'even') : g.kind === 'colorRun' ? 'run' : g.kind === 'color' ? 'any' : g.kind
-  /** A run in one color and a group of any cards in one color are their own kinds, so they count as one color here. */
+  /** A run in one color and an all one color group are their own kinds, so they count as one color here. */
   const oneColorOf = (g: GroupSpec) => g.kind === 'colorRun' || g.kind === 'color' || !!g.oneColor
 
   function specOf(choice: Choice, size: number, oneColor: boolean, noWild: boolean): GroupSpec {
@@ -64,7 +64,7 @@
     groups = groups.map((g, k) => (k === i ? patch(g) : g))
   }
   function setChoice(i: number, choice: Choice) {
-    // Any cards is always one color, so leaving it starts again with the switch off.
+    // All one color is always one color, so leaving it starts again with the switch off.
     change(i, (g) => specOf(choice, g.size, g.kind === 'color' ? false : oneColorOf(g), !!g.noWild))
   }
   function toggleOneColor(i: number) {

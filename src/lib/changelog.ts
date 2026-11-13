@@ -16,7 +16,7 @@ export const CHANGELOG: ChangeEntry[] = [
     id: 24,
     date: '2026-11-13',
     title: 'One color on any group',
-    body: 'In the designer, One color is now a switch like No Wilds that works on sets, runs, and runs of evens or odds. A one-color set is a matched pair of identical cards (the deck only has 2 of each card in a color, so 3 or more needs Wilds), and you can now build a run of evens or odds in one color. Rainbow runs cannot be one color. "Any cards" is the old "all one color" group. New phase names write the switches in parentheses, like 1 set of 2 (one color, no wilds).',
+    body: 'In the designer, One color is now a switch like No Wilds that works on sets, runs, and runs of evens or odds. A one-color set is a matched pair of identical cards (the deck only has 2 of each card in a color, so 3 or more needs Wilds), and you can now build a run of evens or odds in one color. Rainbow runs cannot be one color. "All one color" has the switch on all the time. New phase names write the switches in parentheses, like 1 set of 2 (one color, no wilds).',
   },
   {
     id: 23,
