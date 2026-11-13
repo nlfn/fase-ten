@@ -83,7 +83,7 @@ A second list of ten phases, chosen on the welcome screen (`phaseSet: 'alternate
 4. 1 rainbow run of 8
 5. 1 run of 6 odds + 1 set of 3
 6. 3 sets of 3
-7. 1 run of 6 (no Wilds)
+7. 1 run of 6 (no wilds)
 8. 1 rainbow run of 4 + 1 set of 4
 9. 1 run of 10
 10. 1 color run of 6
