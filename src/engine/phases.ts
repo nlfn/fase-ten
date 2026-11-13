@@ -14,6 +14,8 @@ import type { Card, Color, NumberCard } from './cards'
  * colorRun: a run where every card is the same color.
  * rainbow: a run with the same number of cards of each color (size / 4). Once laid it is a plain run.
  * Any group can also be marked noWild: no Wilds can be used to lay it down (they can still be added afterwards).
+ * A set or a parity run can be marked oneColor: every natural card in it is the same color (a set then holds at most
+ * the 2 copies a color has of a number, so more than 2 needs Wilds). A plain run in one color is a colorRun.
  */
 export type GroupKind = 'set' | 'run' | 'color' | 'parity' | 'colorRun' | 'rainbow'
 
@@ -25,6 +27,8 @@ export interface GroupSpec {
   parity?: Parity
   /** True when no Wilds may be used to lay this group down. */
   noWild?: boolean
+  /** True when a set or a run of evens or odds must be all one color. */
+  oneColor?: boolean
 }
 
 /**
@@ -147,7 +151,7 @@ export const MAX_GROUPS = 5
 
 export function encodeGroups(groups: readonly GroupSpec[]): string {
   return groups
-    .map((g) => (g.kind === 'parity' ? (g.parity === 'odd' ? 'o' : 'e') : KIND_LETTER[g.kind]) + g.size + (g.noWild ? 'n' : ''))
+    .map((g) => (g.kind === 'parity' ? (g.parity === 'odd' ? 'o' : 'e') : KIND_LETTER[g.kind]) + g.size + (g.oneColor ? 'c' : '') + (g.noWild ? 'n' : ''))
     .join('-')
 }
 
@@ -161,6 +165,7 @@ export function groupsProblem(groups: readonly GroupSpec[]): string | null {
     if (!Number.isInteger(g.size) || g.size < 2) return 'Every group needs at least 2 cards'
     switch (g.kind) {
       case 'set':
+        if (g.oneColor && g.noWild && g.size > 2) return 'A one-color set with no Wilds can be at most 2 cards (there are 2 of each card)'
         if (g.noWild && g.size > 8) return 'A set with no Wilds can be at most 8 cards (there are 8 of each number)'
         break
       case 'run':
@@ -173,6 +178,7 @@ export function groupsProblem(groups: readonly GroupSpec[]): string | null {
         if (g.size > 6) return 'A run of evens or odds can be at most 6 cards'
         break
       case 'rainbow':
+        if (g.oneColor) return 'A rainbow run cannot be one color'
         if (g.size % 4 !== 0) return 'A rainbow run needs a multiple of 4 cards (the same number of each color)'
         if (g.size > MAX_VALUE - MIN_VALUE + 1) return `A run can be at most ${MAX_VALUE - MIN_VALUE + 1} cards`
         break
@@ -185,21 +191,28 @@ export function groupsProblem(groups: readonly GroupSpec[]): string | null {
 export function decodeGroups(code: string): GroupSpec[] | null {
   const specs: GroupSpec[] = []
   for (const part of code.split('-')) {
-    const m = /^([screkbpo])(\d{1,2})(n?)$/.exec(part)
+    const m = /^([screkbpo])(\d{1,2})(c?)(n?)$/.exec(part)
     if (!m) return null
     const size = Number(m[2])
     // 'p' (a run with no Wilds) is how the first single round codes spelled it.
-    const noWild = m[3] === 'n' || m[1] === 'p'
+    const noWild = m[4] === 'n' || m[1] === 'p'
+    const oneColor = m[3] === 'c'
+    // The kinds that are one color already say so, so the flag on them is only a mistake.
+    if (oneColor && (m[1] === 'c' || m[1] === 'k')) return null
+    let spec: GroupSpec
     switch (m[1]) {
-      case 's': specs.push({ kind: 'set', size }); break
-      case 'c': specs.push({ kind: 'color', size }); break
-      case 'k': specs.push({ kind: 'colorRun', size }); break
-      case 'b': specs.push({ kind: 'rainbow', size }); break
-      case 'e': specs.push({ kind: 'parity', size, parity: 'even' }); break
-      case 'o': specs.push({ kind: 'parity', size, parity: 'odd' }); break
-      default: specs.push({ kind: 'run', size })
+      case 's': spec = { kind: 'set', size }; break
+      case 'c': spec = { kind: 'color', size }; break
+      case 'k': spec = { kind: 'colorRun', size }; break
+      case 'b': spec = { kind: 'rainbow', size }; break
+      case 'e': spec = { kind: 'parity', size, parity: 'even' }; break
+      case 'o': spec = { kind: 'parity', size, parity: 'odd' }; break
+      // A run in one color is the color run kind, so there is only one way to write it down.
+      default: spec = oneColor ? { kind: 'colorRun', size } : { kind: 'run', size }
     }
-    if (noWild) specs[specs.length - 1].noWild = true
+    if (oneColor && (spec.kind === 'set' || spec.kind === 'parity' || spec.kind === 'rainbow')) spec.oneColor = true
+    if (noWild) spec.noWild = true
+    specs.push(spec)
   }
   return groupsProblem(specs) === null ? specs : null
 }
@@ -226,11 +239,12 @@ export function describeGroups(groups: readonly GroupSpec[]): string {
       case 'set': parts.push(`${plural(n, 'set', 'sets')} of ${g.size}`); break
       case 'run': parts.push(`${plural(n, 'run', 'runs')} of ${g.size}`); break
       case 'parity': parts.push(`${plural(n, 'run', 'runs')} of ${g.size} ${g.parity === 'odd' ? 'odds' : 'evens'}`); break
-      case 'colorRun': parts.push(`${plural(n, 'color run', 'color runs')} of ${g.size}`); break
+      case 'colorRun': parts.push(`${plural(n, 'run', 'runs')} of ${g.size}`); break
       case 'rainbow': parts.push(`${plural(n, 'rainbow run', 'rainbow runs')} of ${g.size}`); break
       case 'color': parts.push(n === 1 ? `${g.size} of one color` : `${n} groups of ${g.size} of one color`); break
     }
-    if (g.noWild) parts[parts.length - 1] += ' (no wilds)'
+    const notes = [g.oneColor || g.kind === 'colorRun' ? 'one color' : '', g.noWild ? 'no wilds' : ''].filter(Boolean)
+    if (notes.length > 0) parts[parts.length - 1] += ` (${notes.join(', ')})`
     i = j
   }
   return parts.join(' + ')
@@ -288,6 +302,7 @@ export interface SetBody {
   kind: 'set'
   value: number
   cards: Card[]
+  color?: Color // a set in one color: only cards of that color (and Wilds) can be added
 }
 export interface RunBody {
   kind: 'run'
@@ -306,18 +321,23 @@ export type MeldBody = SetBody | RunBody | ColorBody
 export type Meld = MeldBody & { id: number; owner: number }
 
 /** Cards of the same number. Wilds may stand in. Needs at least `minSize` cards. */
-export function buildSet(cards: readonly Card[], minSize: number): SetBody | null {
+export function buildSet(cards: readonly Card[], minSize: number, sameColor = false): SetBody | null {
   if (cards.length < minSize) return null
   let value = 0
+  let color: Color | null = null
   for (const c of cards) {
     if (c.kind === 'skip') return null
     if (c.kind === 'number') {
       if (value === 0) value = c.value
       else if (c.value !== value) return null
+      if (sameColor) {
+        if (color === null) color = c.color
+        else if (c.color !== color) return null
+      }
     }
   }
   if (value === 0) return null
-  return { kind: 'set', value, cards: cards.slice() }
+  return sameColor && color ? { kind: 'set', value, cards: cards.slice(), color } : { kind: 'set', value, cards: cards.slice() }
 }
 
 const ALL_VALUES = Array.from({ length: MAX_VALUE - MIN_VALUE + 1 }, (_, i) => MIN_VALUE + i)
@@ -409,13 +429,13 @@ export function buildGroup(spec: GroupSpec, cards: readonly Card[]): MeldBody | 
   if (spec.noWild && cards.some((c) => c.kind === 'wild')) return null
   switch (spec.kind) {
     case 'set':
-      return buildSet(cards, spec.size)
+      return buildSet(cards, spec.size, !!spec.oneColor)
     case 'run':
       return buildRun(cards, spec.size)
     case 'color':
       return buildColor(cards, spec.size)
     case 'parity':
-      return buildRun(cards, spec.size, { parity: spec.parity })
+      return buildRun(cards, spec.size, { parity: spec.parity, sameColor: !!spec.oneColor })
     case 'colorRun':
       return buildRun(cards, spec.size, { sameColor: true })
     case 'rainbow':
@@ -496,7 +516,7 @@ export function canHit(meld: MeldBody, card: Card, end?: RunEnd): boolean {
   if (card.kind === 'skip') return false
   switch (meld.kind) {
     case 'set':
-      return card.kind === 'wild' || card.value === meld.value
+      return card.kind === 'wild' || (card.value === meld.value && (!meld.color || card.color === meld.color))
     case 'color':
       return card.kind === 'wild' || card.color === meld.color
     case 'run': {
@@ -535,7 +555,10 @@ function mayJoin(spec: GroupSpec, cards: readonly Card[]): boolean {
   const naturals = cards.filter((c): c is NumberCard => c.kind === 'number')
   switch (spec.kind) {
     case 'set':
-      return naturals.every((c) => c.value === naturals[0].value)
+      return (
+        naturals.every((c) => c.value === naturals[0].value) &&
+        (!spec.oneColor || naturals.every((c) => c.color === naturals[0].color))
+      )
     case 'color':
       return naturals.every((c) => c.color === naturals[0].color)
     case 'colorRun':
@@ -543,6 +566,7 @@ function mayJoin(spec: GroupSpec, cards: readonly Card[]): boolean {
       break
     case 'parity':
       if (naturals.some((c) => (c.value % 2 === 0) !== (spec.parity === 'even'))) return false
+      if (spec.oneColor && !naturals.every((c) => c.color === naturals[0].color)) return false
       break
     case 'rainbow': {
       const each = Math.floor(spec.size / 4)
@@ -690,7 +714,7 @@ export function findPhaseLayout(
     const spec = specs[specIdx]
     // Two groups of the same kind are interchangeable, so only look at them in one order.
     const prev = specIdx > 0 ? specs[specIdx - 1] : null
-    const twin = prev !== null && prev.kind === spec.kind && prev.size === spec.size && prev.parity === spec.parity && !!prev.noWild === !!spec.noWild
+    const twin = prev !== null && prev.kind === spec.kind && prev.size === spec.size && prev.parity === spec.parity && !!prev.noWild === !!spec.noWild && !!prev.oneColor === !!spec.oneColor
     const floor = twin ? (place.get(chosen[specIdx - 1][0].id) ?? -1) : -1
     for (const combo of combinations(remaining, spec.size)) {
       if (twin && (place.get(combo[0].id) ?? -1) < floor) continue
@@ -795,13 +819,27 @@ interface Option {
 }
 
 /** Every way one group could be filled from these counts: how many cards it uses, and what is left. */
-function optionsFor(spec: GroupSpec, counts: Counts): Option[] {
+function optionsFor(spec: GroupSpec, counts: Counts, sparing: boolean): Option[] {
   const out: Option[] = []
   switch (spec.kind) {
     case 'set':
       for (let v = MIN_VALUE; v <= MAX_VALUE; v++) {
-        const left = cloneCounts(counts)
-        out.push({ got: takeNumber(left, v, spec.size), left })
+        if (spec.oneColor) {
+          // All one color: only the copies of this number in a single color count.
+          for (let k = 0; k < 4; k++) {
+            const left = cloneCounts(counts)
+            const got = Math.min(spec.size, left[v][k])
+            left[v][k] -= got
+            out.push({ got, left })
+          }
+          continue
+        }
+        // Which colors a set takes matters when another group wants a color of this number (a pair in one
+        // color, say), so also try leaving each color for last.
+        for (let spare = -1; spare < (sparing ? 4 : 0); spare++) {
+          const left = cloneCounts(counts)
+          out.push({ got: takeNumber(left, v, spec.size, spare < 0 ? undefined : spare), left })
+        }
       }
       break
     case 'color':
@@ -832,6 +870,13 @@ function optionsFor(spec: GroupSpec, counts: Counts): Option[] {
       break
     default:
       for (const w of runWindows(spec)) {
+        if (spec.oneColor) {
+          for (let k = 0; k < 4; k++) {
+            const left = cloneCounts(counts)
+            out.push({ got: takeRun(left, spec, w, k), left })
+          }
+          continue
+        }
         const left = cloneCounts(counts)
         out.push({ got: takeRun(left, spec, w), left })
       }
@@ -844,18 +889,18 @@ function optionsFor(spec: GroupSpec, counts: Counts): Option[] {
  * a set and a run that want the same card are sorted out properly. With more, each group in turn
  * takes the most it can (biggest groups first), which is close enough for an estimate.
  */
-function most(specs: readonly GroupSpec[], counts: Counts): number {
+function most(specs: readonly GroupSpec[], counts: Counts, sparing: boolean): number {
   if (specs.length === 0) return 0
   const [first, ...rest] = specs
-  const options = optionsFor(first, counts)
+  const options = optionsFor(first, counts, sparing)
   if (specs.length <= 2) {
     let best = 0
-    for (const o of options) best = Math.max(best, o.got + most(rest, o.left))
+    for (const o of options) best = Math.max(best, o.got + most(rest, o.left, sparing))
     return best
   }
   let pick = options[0]
   for (const o of options) if (o.got > pick.got) pick = o
-  return pick.got + most(rest, pick.left)
+  return pick.got + most(rest, pick.left, sparing)
 }
 
 /**
@@ -889,12 +934,14 @@ function estimateMissing(hand: readonly Card[], specs: readonly GroupSpec[]): nu
     else if (c.kind === 'number') counts[c.value][COLORS.indexOf(c.color)]++
   }
 
-  const got = most(specs.slice().sort((x, y) => y.size - x.size), counts)
+  // Another group that wants one color of a number is why a set has to try leaving each color for last.
+  const sparing = specs.some((g) => g.oneColor)
+  const got = most(specs.slice().sort((x, y) => y.size - x.size), counts, sparing)
   // Wilds only help with groups that allow them. The groups that do not are counted first, as if they get
   // first pick of the naturals, and whatever they are still short of is a gap no Wild can close.
   const strict = specs.filter((g) => g.noWild)
   if (strict.length === 0) return Math.max(0, needed - got - wilds)
   const strictSize = strict.reduce((sum, g) => sum + g.size, 0)
-  const strictGap = Math.min(needed - got, strictSize - most(strict.slice().sort((x, y) => y.size - x.size), counts))
+  const strictGap = Math.min(needed - got, strictSize - most(strict.slice().sort((x, y) => y.size - x.size), counts, sparing))
   return Math.max(0, strictGap + Math.max(0, needed - got - strictGap - wilds))
 }

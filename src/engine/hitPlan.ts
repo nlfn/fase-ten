@@ -13,7 +13,7 @@ const NODE_LIMIT = 40_000
 const cardSig = (c: Card): string => (c.kind === 'number' ? `n${c.value}${c.color}` : c.kind)
 
 function meldSig(m: MeldBody): string {
-  if (m.kind === 'set') return `s${m.value}`
+  if (m.kind === 'set') return `s${m.value}${m.color ?? ''}`
   if (m.kind === 'color') return `c${m.color}`
   return `r${m.start}-${m.end}${m.step ? 'e' : ''}${m.color ?? ''}`
 }
@@ -21,7 +21,7 @@ function meldSig(m: MeldBody): string {
 /** A copy of a group that only keeps what decides which cards fit. */
 export function lite(m: MeldBody): MeldBody {
   if (m.kind === 'run') return { kind: 'run', start: m.start, end: m.end, cards: [], step: m.step, color: m.color }
-  if (m.kind === 'set') return { kind: 'set', value: m.value, cards: [] }
+  if (m.kind === 'set') return { kind: 'set', value: m.value, cards: [], color: m.color }
   return { kind: 'color', color: m.color, cards: [] }
 }
 

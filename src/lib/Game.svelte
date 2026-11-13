@@ -385,11 +385,13 @@
   function meldTitle(m: Meld): string {
     switch (m.kind) {
       case 'set':
-        return `Set of ${m.value}s`
-      case 'run':
-        if (m.step) return `${m.start % 2 === 0 ? 'Even' : 'Odd'} run ${m.start} to ${m.end}`
-        if (m.color) return `${m.color[0].toUpperCase()}${m.color.slice(1)} run ${m.start} to ${m.end}`
+        return m.color ? `${m.color[0].toUpperCase()}${m.color.slice(1)} set of ${m.value}s` : `Set of ${m.value}s`
+      case 'run': {
+        const tint = m.color ? `${m.color[0].toUpperCase()}${m.color.slice(1)} ` : ''
+        if (m.step) return `${tint}${m.start % 2 === 0 ? (tint ? 'even' : 'Even') : tint ? 'odd' : 'Odd'} run ${m.start} to ${m.end}`
+        if (m.color) return `${tint}run ${m.start} to ${m.end}`
         return `Run ${m.start} to ${m.end}`
+      }
       case 'color':
         return `${m.color[0].toUpperCase()}${m.color.slice(1)} cards`
     }
