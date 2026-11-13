@@ -42,7 +42,8 @@ describe('phases as text', () => {
     expect(groupsProblem([g('parity', 7, 'even')])).toContain('6')
     expect(groupsProblem([g('rainbow', 6)])).toContain('multiple of 4')
     expect(groupsProblem([g('set', 1)])).not.toBeNull()
-    expect(groupsProblem([g('set', 2), g('set', 2), g('set', 2), g('set', 2), g('set', 2)])).not.toBeNull()
+    expect(groupsProblem([g('set', 2), g('set', 2), g('set', 2), g('set', 2), g('set', 2)])).toBeNull()
+    expect(groupsProblem(Array.from({ length: 6 }, () => g('set', 1)))).toContain('5')
     expect(groupsProblem([g('run', 10)])).toBeNull()
     expect(decodeGroups('s3-x4')).toBeNull()
     expect(decodeGroups('s30')).toBeNull()
@@ -95,7 +96,7 @@ describe('a single round game', () => {
   }
 
   it('ends after one round, and whoever went out wins with zero points', () => {
-    for (const code of ['s3-s3', 'r4-s3', 'k6', 'b8', 'p6', 'e5-s3', 'c7', 'r10']) {
+    for (const code of ['s3-s3', 'r4-s3', 'k6', 'b8', 'p6', 'e5-s3', 'c7', 'r10', 's2-s2-s2-s2-s2', 'k2-r2-e2-s2-c2']) {
       for (const level of ['easy', 'expert'] as const) {
         const s = play(code, level, 11)
         expect(s.status, `${code} ${level}`).toBe('gameOver')
