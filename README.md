@@ -83,7 +83,7 @@ A second list of ten phases, chosen on the welcome screen (`phaseSet: 'alternate
 4. 1 rainbow run of 8
 5. 1 run of 6 odds + 1 set of 3
 6. 3 sets of 3
-7. 1 run of 6, no Wilds
+7. 1 run of 6 (no Wilds)
 8. 1 rainbow run of 4 + 1 set of 4
 9. 1 run of 10
 10. 1 color run of 6
@@ -93,7 +93,7 @@ New kinds of group (all in `phases.ts`):
 - **Run of evens or odds** steps by two. A run of five evens is 2 to 10 or 4 to 12 and can grow by the next even number at either end. A run of six evens (2 to 12) or odds (1 to 11) is complete and takes no hits, not even a Wild.
 - **Color run** (a run in one color) only takes cards of that color (or a Wild) when hit.
 - **Rainbow run** (one of each color in a run of four, two of each in a run of eight; the word is drawn in the four colors in the Phases table) is checked when laid down, with Wilds filling the gaps. Afterwards it is an ordinary run, so any color can be added.
-- **Run of 6, no Wilds** cannot be laid down with a Wild in it. Wilds are only useful for adding to groups already on the table, so bots discard them before laying down (`allowsWilds`). Hitting with a Wild afterwards is allowed.
+- **Run of 6 (no Wilds)** cannot be laid down with a Wild in it. Wilds are only useful for adding to groups already on the table, so bots discard them before laying down (`allowsWilds`). Hitting with a Wild afterwards is allowed.
 - A phase can have up to four groups.
 
 How the ten were chosen: the candidates in `ALTERNATE_CANDIDATES` (about 40 of them) were simulated with three Expert bots at a table where everyone is on a random phase (several thousand rounds each). The measure is the share of players who laid down before the round ended. The ten above score about 85, 71, 74, 64, 64, 63, 63, 61, 63 and 48% (Easy bots: 85, 75, 70, 67, 59, 61, 62, 60, 56 and 48%), and the opener takes about 3 to 4 turns to lay down instead of 2. Classic ranges from 92% to 46%. The run of 6 in one color is kept as Phase 10 on purpose: it is the hardest, and right after the run of 10 (whoever lays that down goes out at once), so the last rounds have a single person going out rather than the same player repeatedly ending the round on someone who is already on the last phase. Swapping a phase means editing `ALTERNATE_ORDER`.

@@ -68,10 +68,10 @@ describe('phase codes with no Wilds', () => {
   })
 
   it('names it', () => {
-    expect(describeGroups([g('set', 3, true), g('set', 3, true)])).toBe('2 sets of 3, no Wilds')
-    expect(describeGroups([g('set', 3), g('run', 4, true)])).toBe('1 set of 3 + 1 run of 4, no Wilds')
-    expect(describeGroups([g('run', 6, true)])).toBe('1 run of 6, no Wilds')
-    expect(describeGroups([g('color', 4, true), g('set', 3)])).toBe('4 of one color, no Wilds + 1 set of 3')
+    expect(describeGroups([g('set', 3, true), g('set', 3, true)])).toBe('2 sets of 3 (no Wilds)')
+    expect(describeGroups([g('set', 3), g('run', 4, true)])).toBe('1 set of 3 + 1 run of 4 (no Wilds)')
+    expect(describeGroups([g('run', 6, true)])).toBe('1 run of 6 (no Wilds)')
+    expect(describeGroups([g('color', 4, true), g('set', 3)])).toBe('4 of one color (no Wilds) + 1 set of 3')
   })
 
   it('a set with no Wilds cannot be bigger than the 8 copies there are', () => {

@@ -90,10 +90,10 @@ export const ALTERNATE_CANDIDATES: readonly PhaseDef[] = [
   { number: 0, groups: [rainbow(4), set(4)], description: '1 rainbow run of 4 + 1 set of 4' },
   { number: 0, groups: [colorRun(3), colorRun(3)], description: '2 color runs of 3' },
   { number: 0, groups: [colorRun(3), colorRun(3), colorRun(3)], description: '3 color runs of 3' },
-  { number: 0, groups: [pureRun(6)], description: '1 run of 6, no Wilds' },
-  { number: 0, groups: [pureRun(7)], description: '1 run of 7, no Wilds' },
-  { number: 0, groups: [pureRun(8)], description: '1 run of 8, no Wilds' },
-  { number: 0, groups: [pureRun(9)], description: '1 run of 9, no Wilds' },
+  { number: 0, groups: [pureRun(6)], description: '1 run of 6 (no Wilds)' },
+  { number: 0, groups: [pureRun(7)], description: '1 run of 7 (no Wilds)' },
+  { number: 0, groups: [pureRun(8)], description: '1 run of 8 (no Wilds)' },
+  { number: 0, groups: [pureRun(9)], description: '1 run of 9 (no Wilds)' },
   { number: 0, groups: [color(6), set(3)], description: '6 of one color + 1 set of 3' },
   { number: 0, groups: [color(6), set(2)], description: '6 of one color + 1 set of 2' },
   { number: 0, groups: [color(4), color(4)], description: '2 groups of 4 of one color' },
@@ -117,7 +117,7 @@ const ALTERNATE_ORDER = [
   '1 rainbow run of 8',
   '1 run of 6 odds + 1 set of 3',
   '3 sets of 3',
-  '1 run of 6, no Wilds',
+  '1 run of 6 (no Wilds)',
   '1 rainbow run of 4 + 1 set of 4',
   '1 run of 10',
   '1 color run of 6',
@@ -230,7 +230,7 @@ export function describeGroups(groups: readonly GroupSpec[]): string {
       case 'rainbow': parts.push(`${plural(n, 'rainbow run', 'rainbow runs')} of ${g.size}`); break
       case 'color': parts.push(n === 1 ? `${g.size} of one color` : `${n} groups of ${g.size} of one color`); break
     }
-    if (g.noWild) parts[parts.length - 1] += ', no Wilds'
+    if (g.noWild) parts[parts.length - 1] += ' (no Wilds)'
     i = j
   }
   return parts.join(' + ')

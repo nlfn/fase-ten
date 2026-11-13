@@ -246,7 +246,7 @@ describe('a game using the alternate phases', () => {
 })
 
 describe('a run with no Wilds', () => {
-  const p = () => ALTERNATE_CANDIDATES.findIndex((c) => c.description === '1 run of 7, no Wilds')
+  const p = () => ALTERNATE_CANDIDATES.findIndex((c) => c.description === '1 run of 7 (no Wilds)')
 
   it('cannot be laid down with a Wild, and the estimate does not count Wilds', () => {
     expect(matchPhase(p(), [nums(1, 2, 3, 4, 5, 6, 7)], LAB)).not.toBeNull()
