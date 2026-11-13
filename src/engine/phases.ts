@@ -143,7 +143,7 @@ const KIND_LETTER: Record<GroupKind, string> = { set: 's', run: 'r', color: 'c',
 
 /** The most cards a phase can ask for: one hand. */
 export const HAND_LIMIT = 10
-export const MAX_GROUPS = 4
+export const MAX_GROUPS = 5
 
 export function encodeGroups(groups: readonly GroupSpec[]): string {
   return groups
@@ -869,6 +869,17 @@ function most(specs: readonly GroupSpec[], counts: Counts): number {
 export function phaseMissing(hand: readonly Card[], phaseIdx: number, set: PhaseSet = 'classic'): number {
   const specs = defsOf(set)[phaseIdx]?.groups
   if (!specs) return 0
+  const estimate = estimateMissing(hand, specs)
+  // The estimate is exact for one or two groups but greedy for three or more, and with many groups it can say
+  // a card is missing when the hand is already complete. When it says short and the hand is big enough to hold
+  // the whole phase, the solver has the final word.
+  if (estimate > 0 && specs.length >= 3 && hand.length >= specs.reduce((sum, g) => sum + g.size, 0)) {
+    if (findPhaseLayout(hand, phaseIdx, [], set)) return 0
+  }
+  return estimate
+}
+
+function estimateMissing(hand: readonly Card[], specs: readonly GroupSpec[]): number {
   const needed = specs.reduce((sum, g) => sum + g.size, 0)
 
   const counts: Counts = Array.from({ length: MAX_VALUE + 1 }, () => [0, 0, 0, 0])

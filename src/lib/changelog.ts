@@ -13,6 +13,12 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 23,
+    date: '2026-11-13',
+    title: 'Five groups in the designer',
+    body: 'A designed phase can now have up to five groups, so five pairs is possible. Computer players are also better at noticing when their hand is already a complete phase with many groups.',
+  },
+  {
     id: 22,
     date: '2026-11-13',
     title: 'Design your own phase',

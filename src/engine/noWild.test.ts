@@ -82,7 +82,7 @@ describe('phase codes with no Wilds', () => {
 })
 
 describe('estimate against solver with no Wilds mixed in', () => {
-  const codes = ['s3-s3n', 'k5n-s2', 'b4n-s3', 'c4n-s3', 'e4n-s3', 's4n-r4n', 'r5-s2n']
+  const codes = ['s3-s3n', 'k5n-s2', 'b4n-s3', 'c4n-s3', 'e4n-s3', 's4n-r4n', 'r5-s2n', 'e2-o2-s2-s2-s2', 'b4-s2-s2-s2', 's3-r3-s2-s2', 'o2-e2-k2-s2n-s2']
   it('says 0 missing whenever a layout exists', () => {
     let seed = 99
     let layouts = 0
