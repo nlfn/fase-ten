@@ -13,6 +13,12 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 22,
+    date: '2026-11-13',
+    title: 'Design your own phase',
+    body: 'Pick Single and tap Design to build a phase from sets, runs, evens or odds, color runs, rainbow runs and one-color groups, up to four groups and ten cards. Any group can be set to no Wilds (Wilds can still be added to it once it is down). Save phases to My phases, and share them as a code or a link. Single round is now just Single on the welcome screen.',
+  },
+  {
     id: 21,
     date: '2026-11-12',
     title: 'Single round',

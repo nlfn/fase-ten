@@ -67,7 +67,11 @@ A fourth mode, Fase Ten spelled backwards. Everyone starts on Phase 10 and works
 
 ### Single round
 
-A fifth way to play, picked under Phases on the welcome screen: one round on one phase from any list (classic, alternate, or the other candidates), with a picker. The game is over when the round ends, and whoever went out scores zero and wins. In the engine this is `mode: 'single'` with `phaseSet: 'single:<code>'`. The code spells out the groups of the phase (`s3-s3` is 2 sets of 3, `r4-s3` a run of 4 and a set of 3, `e5` a run of 5 evens, `k6` a color run of 6, `b8` a rainbow run of 8, `p6` a run of 6 with no Wilds, `c7` 7 of one color, `o` for odds), so a saved game needs no lookup table. `encodeGroups`, `decodeGroups`, `describeGroups` and `groupsProblem` in `phases.ts` convert and check these codes. All ten slots hold that one phase and every player starts on the last one with the others marked done, so the existing "finish the last phase" rule ends the game.
+A fifth way to play, picked under Phases on the welcome screen: one round on one phase from any list (classic, alternate, or the other candidates), with a picker. The game is over when the round ends, and whoever went out scores zero and wins. In the engine this is `mode: 'single'` with `phaseSet: 'single:<code>'`. The code spells out the groups of the phase (`s3-s3` is 2 sets of 3, `r4-s3` a run of 4 and a set of 3, `e5` a run of 5 evens, `k6` a color run of 6, `b8` a rainbow run of 8, `r6n` a run of 6 with no Wilds (`p6` still reads the same), `c7` 7 of one color, `o` for odds), so a saved game needs no lookup table. `encodeGroups`, `decodeGroups`, `describeGroups` and `groupsProblem` in `phases.ts` convert and check these codes. All ten slots hold that one phase and every player starts on the last one with the others marked done, so the existing "finish the last phase" rule ends the game.
+
+### Designing a phase
+
+Under Single, the Design button opens a builder: up to four groups (set, run, all one color, evens, odds, color run, rainbow run), each with a size and an optional No Wilds switch, up to ten cards in all (`groupsProblem` explains anything impossible, such as a rainbow run that is not a multiple of 4 or a set of 9 with no Wilds). `noWild` is a flag on any group: no Wilds may be used to lay that group down, though a Wild can be added to it once it is on the table. The estimate (`phaseMissing`) counts the strict groups as getting first pick of the naturals and never lets a Wild close a gap in one. Codes carry the flag as an `n` suffix (`s3-r4n` is a set of 3 and a run of 4 with no Wilds). The last phase picked is remembered, a named list lives under My phases (`fase-ten:custom-phases:v1`, on that device only), and a code or a link (`?phase=s3-r4n`) shares one.
 
 ### Alternate phases
 
@@ -79,7 +83,7 @@ A second list of ten phases, chosen on the welcome screen (`phaseSet: 'alternate
 4. 1 rainbow run of 8
 5. 1 run of 6 odds + 1 set of 3
 6. 3 sets of 3
-7. 1 run of 6, no Wilds
+7. 1 run of 6 (no wilds)
 8. 1 rainbow run of 4 + 1 set of 4
 9. 1 run of 10
 10. 1 color run of 6
@@ -89,7 +93,7 @@ New kinds of group (all in `phases.ts`):
 - **Run of evens or odds** steps by two. A run of five evens is 2 to 10 or 4 to 12 and can grow by the next even number at either end. A run of six evens (2 to 12) or odds (1 to 11) is complete and takes no hits, not even a Wild.
 - **Color run** (a run in one color) only takes cards of that color (or a Wild) when hit.
 - **Rainbow run** (one of each color in a run of four, two of each in a run of eight; the word is drawn in the four colors in the Phases table) is checked when laid down, with Wilds filling the gaps. Afterwards it is an ordinary run, so any color can be added.
-- **Run of 6, no Wilds** cannot be laid down with a Wild in it. Wilds are only useful for adding to groups already on the table, so bots discard them before laying down (`allowsWilds`). Hitting with a Wild afterwards is allowed.
+- **Run of 6 (no Wilds)** cannot be laid down with a Wild in it. Wilds are only useful for adding to groups already on the table, so bots discard them before laying down (`allowsWilds`). Hitting with a Wild afterwards is allowed.
 - A phase can have up to four groups.
 
 How the ten were chosen: the candidates in `ALTERNATE_CANDIDATES` (about 40 of them) were simulated with three Expert bots at a table where everyone is on a random phase (several thousand rounds each). The measure is the share of players who laid down before the round ended. The ten above score about 85, 71, 74, 64, 64, 63, 63, 61, 63 and 48% (Easy bots: 85, 75, 70, 67, 59, 61, 62, 60, 56 and 48%), and the opener takes about 3 to 4 turns to lay down instead of 2. Classic ranges from 92% to 46%. The run of 6 in one color is kept as Phase 10 on purpose: it is the hardest, and right after the run of 10 (whoever lays that down goes out at once), so the last rounds have a single person going out rather than the same player repeatedly ending the round on someone who is already on the last phase. Swapping a phase means editing `ALTERNATE_ORDER`.
