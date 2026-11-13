@@ -19,7 +19,7 @@ import type { Meld, PhaseSet, RunEnd } from './phases'
  * yousee: when you lay down, you choose which of the phases you have not done yet.
  * random: like classic, but each player gets their own secret random order for the ten phases.
  */
-export type GameMode = 'classic' | 'yousee' | 'random' | 'reverse'
+export type GameMode = 'classic' | 'yousee' | 'random' | 'reverse' | 'single'
 
 export interface Player {
   name: string
@@ -190,6 +190,14 @@ export function createGame(
       const shuffled = shuffleWithSeed(p.order, state.rngSeed)
       state.rngSeed = shuffled.seed
       p.order = shuffled.items
+    }
+  }
+  if (mode === 'single') {
+    // One round on one phase. Everyone starts on the last slot with the rest marked done, so the players
+    // who lay down finish the game, and the one who goes out (score zero) wins.
+    for (const p of state.players) {
+      p.done = p.done.map((_, i) => i < PHASE_COUNT - 1)
+      p.phase = PHASE_COUNT - 1
     }
   }
   if (mode === 'reverse') {
