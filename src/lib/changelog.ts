@@ -13,6 +13,12 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 26,
+    date: '2026-11-14',
+    title: 'A rebuilt engine, and one game ended',
+    body: 'The rules engine was rebuilt to be simpler inside. The game plays the same, but a game that was in progress before this update could not be carried over. Your settings and saved phases are still here.',
+  },
+  {
     id: 25,
     date: '2026-11-14',
     title: 'A warning before an update ends your game',

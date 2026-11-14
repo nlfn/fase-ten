@@ -25,11 +25,11 @@
 
 import { cardPoints } from './cards'
 import type { Card } from './cards'
-import { PHASE_COUNT, allowsWilds, canHit, findPhaseLayout, phaseMissing, phaseSize } from './phases'
+import { allowsWilds, canHit, findPhaseLayout, phaseMissing, phaseSize } from './phases'
 import type { RunEnd } from './phases'
 import { createHitPlanner, lite, withHit } from './hitPlan'
 import { currentPlayer, hitTargets, topDiscard } from './game'
-import { isSittingOut, targetPhase } from './game'
+import { doneCount, hasLaidDown, isSittingOut, openPhases, phaseCount } from './game'
 import type { Action, GameState, Player } from './game'
 
 export type BotLevel = 'easy' | 'medium' | 'expert'
@@ -93,7 +93,7 @@ export function discardDanger(state: GameState, memory: Map<number, Recall>, car
   if (card.kind !== 'number') return 0
   let danger = 0
   for (const [index, entry] of memory) {
-    if (state.players[index].laidDown) continue
+    if (hasLaidDown(state.players[index])) continue
     let mine = 0
     for (const w of entry.picked) {
       if (w.kind !== 'number') continue
@@ -112,18 +112,9 @@ export function createBot(level: BotLevel = 'expert', random: () => number = Mat
   const { mistakeRate, lookAhead, defense } = RULES[level]
   const mistake = () => random() < mistakeRate
 
-  /** The phases this player could still lay down this round. */
-  function openPhases(state: GameState, me: Player): number[] {
-    if (state.mode !== 'yousee') {
-      const target = targetPhase(state, me)
-      return target === null ? [] : [target]
-    }
-    return me.done.map((done, i) => (done ? -1 : i)).filter((i) => i >= 0)
-  }
-
   /** How many cards short the hand is of the closest phase the player is still free to lay down. */
-  function missingFor(state: GameState, me: Player, hand: readonly Card[]): number {
-    const open = openPhases(state, me)
+  function missingFor(state: GameState, hand: readonly Card[]): number {
+    const open = openPhases(state, state.current)
     if (open.length === 0) return 0
     return Math.min(...open.map((i) => phaseMissing(hand, i, state.phaseSet)))
   }
@@ -134,10 +125,10 @@ export function createBot(level: BotLevel = 'expert', random: () => number = Mat
     if (!top || top.kind === 'skip') return { type: 'drawDeck' }
 
     let wanted: boolean
-    if (me.laidDown) {
+    if (hasLaidDown(me)) {
       wanted = state.melds.some((m) => canHit(m, top))
     } else {
-      wanted = missingFor(state, me, [...me.hand, top]) < missingFor(state, me, me.hand)
+      wanted = missingFor(state, [...me.hand, top]) < missingFor(state, me.hand)
     }
     if (wanted && !mistake()) return { type: 'drawDiscard' }
     return { type: 'drawDeck' }
@@ -146,10 +137,10 @@ export function createBot(level: BotLevel = 'expert', random: () => number = Mat
   function choosePlay(state: GameState): Action {
     const me = currentPlayer(state)
 
-    if (!me.laidDown) {
+    if (!hasLaidDown(me)) {
       // In YouSee any unfinished phase will do. Take the biggest one the hand can make, since
       // the small ones are easy to pick up later.
-      const ready = openPhases(state, me)
+      const ready = openPhases(state, state.current)
         .filter((i) => phaseMissing(me.hand, i, state.phaseSet) === 0)
         .sort((a, b) => phaseSize(b, state.phaseSet) - phaseSize(a, state.phaseSet) || b - a)
       for (const phase of ready) {
@@ -225,15 +216,16 @@ export function createBot(level: BotLevel = 'expert', random: () => number = Mat
     state.players.forEach((p, i) => {
       if (i === state.current || p.skipsPending > 0 || isSittingOut(state, i)) return
       // Someone who has laid down and is nearly out is the one to stop. This outweighs everything else.
-      const nearOut = p.laidDown && p.hand.length <= 2
-      const closing = p.laidDown && p.hand.length <= 4
+      const nearOut = hasLaidDown(p) && p.hand.length <= 2
+      const closing = hasLaidDown(p) && p.hand.length <= 4
       // Anyone closing in on the end of the game is the one to stop, at every level: a player on their
       // last phase can finish the whole game, and one a phase or two behind that is about to be.
-      const remaining = PHASE_COUNT - p.phase
+      const finished = doneCount(p)
+      const remaining = phaseCount(state) - finished
       const endgame = remaining <= 1 ? 400 : remaining === 2 ? 350 : remaining === 3 ? 60 : 0
       const score =
-        (p.laidDown ? 50 : 0) +
-        p.phase * 3 +
+        (hasLaidDown(p) ? 50 : 0) +
+        finished * 3 +
         (11 - p.hand.length) +
         (defense ? (nearOut ? 300 : closing ? 40 : 0) : 0) +
         endgame
@@ -262,16 +254,16 @@ export function createBot(level: BotLevel = 'expert', random: () => number = Mat
 
     // Keep Wilds unless there is nothing else to throw. The exception is a phase that cannot use Wilds at all:
     // until the player has laid down, a Wild there is only 25 points of dead weight.
-    const wildsHelp = me.laidDown || openPhases(state, me).some((i) => allowsWilds(i, state.phaseSet))
+    const wildsHelp = hasLaidDown(me) || openPhases(state, state.current).some((i) => allowsWilds(i, state.phaseSet))
     let candidates: Card[] = wildsHelp ? hand.filter((c) => c.kind !== 'wild') : hand.slice()
     if (candidates.length === 0) candidates = hand.slice()
 
     // An opponent who has laid down can add cards to any group on the table.
     const others = state.players.filter((_, i) => i !== state.current)
-    const exposed = others.some((p) => p.laidDown)
+    const exposed = others.some((p) => hasLaidDown(p))
     const usable = (c: Card) => exposed && state.melds.some((m) => canHit(m, c))
     // When one of them is almost out, do not hand them a card they can play, unless every choice is playable.
-    if (defense && others.some((p) => p.laidDown && p.hand.length <= 2) && !mistake()) {
+    if (defense && others.some((p) => hasLaidDown(p) && p.hand.length <= 2) && !mistake()) {
       const safe = candidates.filter((c) => !usable(c))
       if (safe.length > 0) candidates = safe
     }
@@ -284,7 +276,7 @@ export function createBot(level: BotLevel = 'expert', random: () => number = Mat
     )
     candidates.sort((a, b) => cardPoints(b) - cardPoints(a) || danger.get(a.id)! - danger.get(b.id)!)
 
-    if (me.laidDown || mistake()) {
+    if (hasLaidDown(me) || mistake()) {
       return { type: 'discard', cardId: candidates[0].id }
     }
 
@@ -294,7 +286,7 @@ export function createBot(level: BotLevel = 'expert', random: () => number = Mat
     let bestDanger = Infinity
     for (const c of candidates) {
       const rest = hand.filter((h) => h.id !== c.id)
-      const missing = missingFor(state, me, rest)
+      const missing = missingFor(state, rest)
       const risk = danger.get(c.id)!
       if (missing < bestMissing || (missing === bestMissing && risk < bestDanger)) {
         bestMissing = missing

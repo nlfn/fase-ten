@@ -11,25 +11,26 @@ import {
   shuffleWithSeed,
 } from './cards'
 import type { Card } from './cards'
-import { PHASE_COUNT, canHit, hitMeld, matchPhase, phaseDescription, runEndsFor } from './phases'
+import { canHit, hitMeld, matchPhase, phaseDescription, phasesOf, runEndsFor } from './phases'
 import type { Meld, PhaseSet, RunEnd } from './phases'
 
 /**
- * classic: you work through the ten phases in order.
+ * The order the phases are taken in.
+ * classic: first to last. reverse: last to first. random: each player gets their own secret order.
  * yousee: when you lay down, you choose which of the phases you have not done yet.
- * random: like classic, but each player gets their own secret random order for the ten phases.
+ * A single round is not a mode: it is a game whose list has one phase.
  */
-export type GameMode = 'classic' | 'yousee' | 'random' | 'reverse' | 'single'
+export type GameMode = 'classic' | 'yousee' | 'random' | 'reverse'
 
 export interface Player {
   name: string
   isBot: boolean
   hand: Card[]
-  phase: number // classic: index 0..9 of the phase being attempted. Always the number of phases completed; 10 means all done
-  order: number[] // the order this player works through the phases (0..9). 1 to 10 in classic, secretly shuffled in random
-  done: boolean[] // which of the ten phases this player has completed
-  laidPhase: number | null // the phase laid down this round (counts as done when the round ends)
-  laidDown: boolean // has laid down this round
+  // Progress through the phases. Everything else (how many are done, the phase being attempted, whether
+  // the player has laid down) is worked out from these three: see doneCount, targetPhase, openPhases.
+  route: number[] // the order this player takes the phases in, as indexes into the game's list
+  done: boolean[] // which phases of the list this player has completed
+  laid: number | null // the phase laid down this round (it counts as done when the round ends), or null
   skipsPending: number // 1 if they will lose their next turn. Skips never stack, so it is never more than 1
   score: number // lower is better
 }
@@ -46,7 +47,7 @@ export interface RoundResult {
   tie?: { players: number[]; how: 'round' | 'coin' }
 }
 
-/** A tied player and the final phase (0..9) they have to repeat in the tiebreaker. */
+/** A tied player and the phase (an index into the list) they have to repeat in the tiebreaker. */
 export interface TieEntry {
   player: number
   phase: number
@@ -83,7 +84,7 @@ export type PlayEvent =
 
 export interface GameState {
   mode: GameMode
-  phaseSet: PhaseSet // which list of ten phases this game uses
+  phaseSet: PhaseSet // which list of phases this game uses (any length)
   players: Player[]
   drawPile: Card[] // last element is the top
   discardPile: Card[] // last element is the top
@@ -102,7 +103,7 @@ export interface GameState {
   events: PlayEvent[] // recent plays this round, oldest first
   scoreHistory: RoundRecord[] // one entry per finished round, oldest first
   drew: boolean[] // who has taken a draw so far this round
-  tiebreak: number[] | null // while a tiebreaker round is being played: the tied players. Everyone else sits out
+  tiebreak: TieEntry[] | null // while a tiebreaker round is being played: the tied players and their phases. Everyone else sits out
   tieNext: TieEntry[] | null // set when a round ended with a tie that a human is part of: the next round is a tiebreaker
 }
 
@@ -149,6 +150,7 @@ export function createGame(
   if (setups.length < 2 || setups.length > 6) {
     throw new Error('Phase games need between 2 and 6 players')
   }
+  const count = phasesOf(phaseSet).length
   const state: GameState = {
     mode,
     phaseSet,
@@ -156,11 +158,9 @@ export function createGame(
       name: p.name,
       isBot: p.isBot,
       hand: [],
-      phase: 0,
-      order: Array.from({ length: PHASE_COUNT }, (_, i) => i),
-      done: Array.from({ length: PHASE_COUNT }, () => false),
-      laidPhase: null,
-      laidDown: false,
+      route: Array.from({ length: count }, (_, i) => i),
+      done: Array.from({ length: count }, () => false),
+      laid: null,
       skipsPending: 0,
       score: 0,
     })),
@@ -187,34 +187,76 @@ export function createGame(
   if (mode === 'random') {
     // Each player gets their own order. It is never shown, only the phase they are on.
     for (const p of state.players) {
-      const shuffled = shuffleWithSeed(p.order, state.rngSeed)
+      const shuffled = shuffleWithSeed(p.route, state.rngSeed)
       state.rngSeed = shuffled.seed
-      p.order = shuffled.items
-    }
-  }
-  if (mode === 'single') {
-    // One round on one phase. Everyone starts on the last slot with the rest marked done, so the players
-    // who lay down finish the game, and the one who goes out (score zero) wins.
-    for (const p of state.players) {
-      p.done = p.done.map((_, i) => i < PHASE_COUNT - 1)
-      p.phase = PHASE_COUNT - 1
+      p.route = shuffled.items
     }
   }
   if (mode === 'reverse') {
-    // Net Esaf: everyone starts at Phase 10 and works down to Phase 1.
-    for (const p of state.players) p.order = p.order.slice().reverse()
+    // Net Esaf: everyone starts at the last phase and works down to the first.
+    for (const p of state.players) p.route = p.route.slice().reverse()
   }
   dealRound(state)
   return state
 }
 
+/** How many phases the game's list has. */
+export function phaseCount(state: Pick<GameState, 'phaseSet'>): number {
+  return phasesOf(state.phaseSet).length
+}
+
+/** True for a game of one phase: one round, and whoever goes out wins. */
+export function isSingleRound(state: Pick<GameState, 'phaseSet'>): boolean {
+  return phaseCount(state) === 1
+}
+
+/** How many phases this player has completed. */
+export function doneCount(player: Pick<Player, 'done'>): number {
+  let n = 0
+  for (const d of player.done) if (d) n++
+  return n
+}
+
+/** True once the player has laid down their phase this round. */
+export function hasLaidDown(player: Pick<Player, 'laid'>): boolean {
+  return player.laid !== null
+}
+
 /**
- * The phase this player has to lay down this round, as an index 0..9. Null in YouSee
- * (they choose) and once they have completed everything.
+ * The phases player number `who` may lay down this round, as indexes into the list.
+ * In a tiebreaker it is the one phase they are repeating. In YouSee it is everything they have not
+ * done. Otherwise it is the next phase on their route, or nothing once they have finished.
  */
-export function targetPhase(state: Pick<GameState, 'mode'>, player: Player): number | null {
+export function openPhases(state: Pick<GameState, 'mode' | 'tiebreak' | 'players'>, who: number): number[] {
+  const player = state.players[who]
+  if (!player) return []
+  if (state.tiebreak) {
+    const entry = state.tiebreak.find((e) => e.player === who)
+    return entry ? [entry.phase] : []
+  }
+  if (state.mode === 'yousee') {
+    const open: number[] = []
+    player.done.forEach((done, i) => {
+      if (!done) open.push(i)
+    })
+    return open
+  }
+  const next = player.route.find((i) => !player.done[i])
+  return next === undefined ? [] : [next]
+}
+
+/**
+ * The one phase player number `who` is working on. In a tiebreaker it is the phase they are repeating.
+ * Otherwise it is the next phase on their route: null in YouSee (they choose) and once they have
+ * completed everything. A player sitting out a tiebreaker still has the phase they were on.
+ */
+export function targetPhase(state: Pick<GameState, 'mode' | 'tiebreak' | 'players'>, who: number): number | null {
+  const player = state.players[who]
+  if (!player) return null
+  const entry = state.tiebreak?.find((e) => e.player === who)
+  if (entry) return entry.phase
   if (state.mode === 'yousee') return null
-  return player.phase < PHASE_COUNT ? player.order[player.phase] : null
+  return player.route.find((i) => !player.done[i]) ?? null
 }
 
 /** Starts the next round after a round has ended. Returns the same state if the round is not over. */
@@ -222,20 +264,9 @@ export function nextRound(state: GameState): GameState {
   if (state.status !== 'roundOver') return state
   const s = structuredClone(state)
   if (s.tieNext && s.tieNext.length > 1) {
-    // A tiebreaker repeats the final phase of each tied player. It is not a numbered round.
-    const entries = s.tieNext
-    for (const { player, phase } of entries) {
-      const p = s.players[player]
-      p.done[phase] = false
-      p.phase = PHASE_COUNT - 1
-      // The one phase left is their last in their own order, which is the one they just finished.
-      const at = p.order.indexOf(phase)
-      if (at >= 0 && at !== PHASE_COUNT - 1) {
-        p.order.splice(at, 1)
-        p.order.push(phase)
-      }
-    }
-    dealRound(s, entries.map((e) => e.player))
+    // A tiebreaker repeats the final phase of each tied player. It is not a numbered round, and it
+    // changes nobody's progress: the tied players have finished, and stay finished.
+    dealRound(s, s.tieNext)
     return s
   }
   s.round += 1
@@ -245,20 +276,20 @@ export function nextRound(state: GameState): GameState {
 
 /** True for a player who is not part of the tiebreaker round that is being played. */
 export function isSittingOut(state: Pick<GameState, 'tiebreak'>, index: number): boolean {
-  return state.tiebreak !== null && state.tiebreak !== undefined && !state.tiebreak.includes(index)
+  return state.tiebreak !== null && state.tiebreak !== undefined && !state.tiebreak.some((e) => e.player === index)
 }
 
-function dealRound(state: GameState, participants: number[] | null = null): void {
+function dealRound(state: GameState, tiebreak: TieEntry[] | null = null): void {
   const shuffled = shuffleWithSeed(buildDeck(), state.rngSeed)
   state.rngSeed = shuffled.seed
   const deck = shuffled.items
 
-  state.tiebreak = participants
+  const participants = tiebreak ? tiebreak.map((e) => e.player) : null
+  state.tiebreak = tiebreak
   state.tieNext = null
   for (const [i, p] of state.players.entries()) {
     p.hand = isSittingOut(state, i) ? [] : deck.splice(0, HAND_SIZE)
-    p.laidDown = false
-    p.laidPhase = null
+    p.laid = null
     p.skipsPending = 0
   }
   const starter = deck.pop() as Card
@@ -322,17 +353,11 @@ function ensureDrawPile(state: GameState): boolean {
 }
 
 function endTiebreak(state: GameState, winner: number | null): void {
-  const tied = state.tiebreak ?? []
+  const tied = (state.tiebreak ?? []).map((e) => e.player)
   const first = winner !== null && tied.includes(winner) ? winner : tied[0]
   const points = state.players.map(() => 0)
-  const completed = state.players.map((p) => p.laidDown)
-  for (const i of tied) {
-    // Everyone in the tiebreaker had finished all ten phases, so they stay finished.
-    const p = state.players[i]
-    p.done = p.done.map(() => true)
-    p.phase = PHASE_COUNT
-  }
-  state.roundResult = { winner, points, completed, tie: { players: tied.slice(), how: 'round' } }
+  const completed = state.players.map(hasLaidDown)
+  state.roundResult = { winner, points, completed, tie: { players: tied, how: 'round' } }
   state.winners = [first]
   state.status = 'gameOver'
   addLog(state, `${state.players[first].name} won the tiebreaker`)
@@ -344,14 +369,11 @@ function endRound(state: GameState, winner: number | null): void {
     return
   }
   const points = state.players.map((p, i) => (i === winner ? 0 : handPoints(p.hand)))
-  const completed = state.players.map((p) => p.laidDown)
+  const completed = state.players.map(hasLaidDown)
+  const count = phaseCount(state)
   state.players.forEach((p, i) => {
     p.score += points[i]
-    if (p.laidDown) {
-      // In classic mode the phase laid down is always the current one.
-      p.done[p.laidPhase ?? targetPhase(state, p) ?? 0] = true
-      p.phase = p.done.filter(Boolean).length
-    }
+    if (p.laid !== null) p.done[p.laid] = true
   })
   state.roundResult = { winner, points, completed }
   state.scoreHistory.push({
@@ -360,14 +382,14 @@ function endRound(state: GameState, winner: number | null): void {
     points,
     totals: state.players.map((p) => p.score),
     laid: completed,
-    shutOut: state.players.map((p, i) => i !== winner && !p.laidDown && !state.drew[i]),
+    shutOut: state.players.map((p, i) => i !== winner && !hasLaidDown(p) && !state.drew[i]),
   })
 
   if (winner !== null) addLog(state, `${state.players[winner].name} went out`)
 
   const finishers = state.players
     .map((p, i) => ({ p, i }))
-    .filter(({ p }) => p.phase >= PHASE_COUNT)
+    .filter(({ p }) => doneCount(p) >= count)
     .map(({ i }) => i)
 
   if (finishers.length > 0) {
@@ -377,7 +399,7 @@ function endRound(state: GameState, winner: number | null): void {
       // The tied players repeat their final phase, and the first one out wins.
       state.tieNext = tied.map((i) => {
         const p = state.players[i]
-        return { player: i, phase: p.laidPhase ?? p.order[PHASE_COUNT - 1] }
+        return { player: i, phase: p.laid ?? p.route[p.route.length - 1] }
       })
       state.winners = []
       state.status = 'roundOver'
@@ -438,7 +460,7 @@ export function applyAction(state: GameState, action: Action): ActionResult {
 
     case 'layDown': {
       if (s.stage !== 'play') return fail('Draw a card first')
-      if (player.laidDown) return fail('You already laid down your phase this round')
+      if (player.laid !== null) return fail('You already laid down your phase this round')
       const used = new Set<number>()
       const groups: Card[][] = []
       for (const ids of action.groups) {
@@ -452,17 +474,18 @@ export function applyAction(state: GameState, action: Action): ActionResult {
         }
         groups.push(cards)
       }
+      const open = openPhases(s, s.current)
+      if (open.length === 0) return fail('You have already completed every phase')
       let phaseIdx: number
       if (s.mode !== 'yousee') {
-        const target = targetPhase(s, player)
-        if (target === null) return fail('You have already completed every phase')
-        phaseIdx = target
+        // The phase is fixed, so the action does not have to name it.
+        phaseIdx = open[0]
       } else {
         const chosen = action.phase
-        if (chosen === undefined || !Number.isInteger(chosen) || chosen < 0 || chosen >= PHASE_COUNT) {
+        if (chosen === undefined || !Number.isInteger(chosen) || chosen < 0 || chosen >= player.done.length) {
           return fail('Choose which phase you are laying down')
         }
-        if (player.done[chosen]) return fail(`You already completed Phase ${chosen + 1}`)
+        if (!open.includes(chosen)) return fail(`You already completed Phase ${chosen + 1}`)
         phaseIdx = chosen
       }
       const bodies = matchPhase(phaseIdx, groups, s.phaseSet)
@@ -473,8 +496,7 @@ export function applyAction(state: GameState, action: Action): ActionResult {
       for (const body of bodies) {
         s.melds.push({ ...body, id: s.nextMeldId++, owner: s.current } as Meld)
       }
-      player.laidDown = true
-      player.laidPhase = phaseIdx
+      player.laid = phaseIdx
       addLog(s, `${player.name} laid down Phase ${phaseIdx + 1}`)
       addEvent(s, { player: s.current, kind: 'laydown', phase: phaseIdx })
       if (player.hand.length === 0) endRound(s, s.current)
@@ -483,7 +505,7 @@ export function applyAction(state: GameState, action: Action): ActionResult {
 
     case 'hit': {
       if (s.stage !== 'play') return fail('Draw a card first')
-      if (!player.laidDown) return fail('Lay down your phase before hitting')
+      if (player.laid === null) return fail('Lay down your phase before hitting')
       const card = player.hand.find((c) => c.id === action.cardId)
       if (!card) return fail('That card is not in your hand')
       const meld = s.melds.find((m) => m.id === action.meldId)
@@ -554,7 +576,7 @@ export function applyAction(state: GameState, action: Action): ActionResult {
 export function discardLastCard(state: GameState, who: number): GameState {
   const player = state.players[who]
   if (state.status !== 'playing' || state.stage !== 'play' || state.current !== who) return state
-  if (!player || !player.laidDown || player.hand.length !== 1) return state
+  if (!player || player.laid === null || player.hand.length !== 1) return state
   const card = player.hand[0]
   // A Skip needs a target even though the round is about to end; any player who is not already skipped will do.
   const target = state.players.findIndex((p, i) => i !== who && !isSittingOut(state, i) && p.skipsPending === 0)
@@ -564,30 +586,6 @@ export function discardLastCard(state: GameState, who: number): GameState {
     skipTarget: card.kind === 'skip' && target >= 0 ? target : undefined,
   })
   return result.ok ? result.state : state
-}
-
-/** Fills in fields that games saved by earlier versions do not have. */
-export function upgradeSavedState(state: GameState): GameState {
-  state.turnCount ??= 0
-  state.hits ??= []
-  state.events ??= []
-  state.scoreHistory ??= []
-  // A round that was already under way cannot say who has drawn, so nobody counts as shut out.
-  state.drew ??= state.players.map(() => true)
-  state.mode ??= 'classic'
-  state.tiebreak ??= null
-  state.tieNext ??= null
-  state.phaseSet ??= 'classic'
-  for (const p of state.players) {
-    p.order ??= Array.from({ length: PHASE_COUNT }, (_, i) => i)
-    p.done ??= Array.from({ length: PHASE_COUNT }, (_, i) => i < p.phase)
-    p.laidPhase ??= p.laidDown ? Math.min(p.phase, PHASE_COUNT - 1) : null
-    // Older saves kept a yes/no flag called `skipped`.
-    const legacy = p as unknown as { skipped?: boolean }
-    p.skipsPending = Math.min(1, p.skipsPending ?? (legacy.skipped ? 1 : 0)) // early saves could stack Skips
-    delete legacy.skipped
-  }
-  return state
 }
 
 // ---------------------------------------------------------------------------
@@ -614,7 +612,7 @@ export interface HitTarget {
 
 /** Every meld on the table the current player could add this card to. */
 export function hitTargets(state: GameState, card: Card): HitTarget[] {
-  if (!currentPlayer(state).laidDown) return []
+  if (currentPlayer(state).laid === null) return []
   const targets: HitTarget[] = []
   for (const meld of state.melds) {
     if (!canHit(meld, card)) continue

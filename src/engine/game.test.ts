@@ -11,10 +11,11 @@ import {
   recentHitIds,
   targetPhase,
   topDiscard,
-  upgradeSavedState,
+  doneCount,
+  hasLaidDown,
 } from './game'
 import type { Action, GameState } from './game'
-import { THREE_PLAYERS, TWO_PLAYERS, craftedGame, ids, num, nums, skip, wild } from './testUtils'
+import { THREE_PLAYERS, TWO_PLAYERS, advance, craftedGame, ids, num, nums, skip, wild } from './testUtils'
 
 function run(state: GameState, action: Action): GameState {
   const result = applyAction(state, action)
@@ -163,38 +164,38 @@ describe('Random mode', () => {
   it('gives every player a secret order that covers all ten phases exactly once', () => {
     for (let seed = 1; seed <= 30; seed++) {
       const s = createGame(THREE_PLAYERS, seed, 'random')
-      for (const p of s.players) expect(sorted(p.order)).toEqual(identity)
+      for (const p of s.players) expect(sorted(p.route)).toEqual(identity)
     }
   })
 
   it('shuffles differently for different players and is repeatable for a seed', () => {
     const a = createGame(THREE_PLAYERS, 7, 'random')
     const b = createGame(THREE_PLAYERS, 7, 'random')
-    expect(a.players.map((p) => p.order)).toEqual(b.players.map((p) => p.order))
-    const distinct = new Set(a.players.map((p) => p.order.join(',')))
+    expect(a.players.map((p) => p.route)).toEqual(b.players.map((p) => p.route))
+    const distinct = new Set(a.players.map((p) => p.route.join(',')))
     expect(distinct.size).toBeGreaterThan(1)
     // Across many games the first phase handed out should vary.
     const firsts = new Set<number>()
-    for (let seed = 1; seed <= 40; seed++) firsts.add(createGame(TWO_PLAYERS, seed, 'random').players[0].order[0])
+    for (let seed = 1; seed <= 40; seed++) firsts.add(createGame(TWO_PLAYERS, seed, 'random').players[0].route[0])
     expect(firsts.size).toBeGreaterThan(4)
   })
 
   it('keeps the plain 1 to 10 order in the other modes', () => {
     for (const mode of ['classic', 'yousee'] as const) {
       const s = createGame(TWO_PLAYERS, 3, mode)
-      for (const p of s.players) expect(p.order).toEqual(identity)
+      for (const p of s.players) expect(p.route).toEqual(identity)
     }
   })
 
   it('targets the phase at the player\'s position in their own order', () => {
     const s = createGame(TWO_PLAYERS, 5, 'random')
-    s.players[0].order = [4, 0, 1, 2, 3, 5, 6, 7, 8, 9]
-    expect(targetPhase(s, s.players[0])).toBe(4)
-    s.players[0].phase = 1
-    expect(targetPhase(s, s.players[0])).toBe(0)
-    s.players[0].phase = 10
-    expect(targetPhase(s, s.players[0])).toBeNull()
-    expect(targetPhase({ mode: 'yousee' }, s.players[0])).toBeNull()
+    s.players[0].route = [4, 0, 1, 2, 3, 5, 6, 7, 8, 9]
+    expect(targetPhase(s, 0)).toBe(4)
+    advance(s, 0, 1)
+    expect(targetPhase(s, 0)).toBe(0)
+    advance(s, 0, 10)
+    expect(targetPhase(s, 0)).toBeNull()
+    expect(targetPhase({ ...s, mode: 'yousee' }, 0)).toBeNull()
   })
 
   const twoSets = () => [...nums(5, 5, 5, 9, 9, 9)]
@@ -202,62 +203,62 @@ describe('Random mode', () => {
   it('only accepts the phase the player was given', () => {
     const hand = twoSets()
     let s = craftedGame(hand, { mode: 'random' })
-    s.players[0].order = [4, 0, 1, 2, 3, 5, 6, 7, 8, 9] // starts on Phase 5, a run of 8
+    s.players[0].route = [4, 0, 1, 2, 3, 5, 6, 7, 8, 9] // starts on Phase 5, a run of 8
     expect(error(s, { type: 'layDown', groups: [ids(hand.slice(0, 3)), ids(hand.slice(3, 6))] })).toMatch(/do not make Phase 5/i)
-    s.players[0].order = [0, 4, 1, 2, 3, 5, 6, 7, 8, 9] // starts on Phase 1
+    s.players[0].route = [0, 4, 1, 2, 3, 5, 6, 7, 8, 9] // starts on Phase 1
     s = run(s, { type: 'layDown', groups: [ids(hand.slice(0, 3)), ids(hand.slice(3, 6))] })
-    expect(s.players[0].laidPhase).toBe(0)
+    expect(s.players[0].laid).toBe(0)
   })
 
   it('moves a player who completed their phase on to the next one in their order', () => {
     const hand = twoSets()
     let s = craftedGame(hand, { mode: 'random' })
-    s.players[0].order = [0, 6, 1, 2, 3, 4, 5, 7, 8, 9]
+    s.players[0].route = [0, 6, 1, 2, 3, 4, 5, 7, 8, 9]
     s = run(s, { type: 'layDown', groups: [ids(hand.slice(0, 3)), ids(hand.slice(3, 6))] })
     expect(s.status).toBe('roundOver') // went out by laying everything down
     expect(s.players[0].done[0]).toBe(true)
-    expect(s.players[0].phase).toBe(1)
-    expect(targetPhase(s, s.players[0])).toBe(6)
+    expect(doneCount(s.players[0])).toBe(1)
+    expect(targetPhase(s, 0)).toBe(6)
     const next = nextRound(s)
-    expect(targetPhase(next, next.players[0])).toBe(6)
+    expect(targetPhase(next, 0)).toBe(6)
   })
 
   it('makes a player who did not complete their phase try the same one again', () => {
     const hand = twoSets()
     let s = craftedGame(hand, { mode: 'random' })
-    s.players[0].order = [0, 6, 1, 2, 3, 4, 5, 7, 8, 9]
-    s.players[1].order = [3, 0, 1, 2, 4, 5, 6, 7, 8, 9]
+    s.players[0].route = [0, 6, 1, 2, 3, 4, 5, 7, 8, 9]
+    s.players[1].route = [3, 0, 1, 2, 4, 5, 6, 7, 8, 9]
     s = run(s, { type: 'layDown', groups: [ids(hand.slice(0, 3)), ids(hand.slice(3, 6))] })
-    expect(s.players[1].phase).toBe(0)
+    expect(doneCount(s.players[1])).toBe(0)
     const next = nextRound(s)
-    expect(targetPhase(next, next.players[1])).toBe(3)
+    expect(targetPhase(next, 1)).toBe(3)
     expect(next.players[1].done.some(Boolean)).toBe(false)
   })
 
   it('Net Esaf starts everyone on Phase 10 and works down', () => {
     const s = createGame(TWO_PLAYERS, 5, 'reverse')
-    for (const p of s.players) {
-      expect(p.order).toEqual([9, 8, 7, 6, 5, 4, 3, 2, 1, 0])
-      expect(targetPhase(s, p)).toBe(9)
+    for (const [i, p] of s.players.entries()) {
+      expect(p.route).toEqual([9, 8, 7, 6, 5, 4, 3, 2, 1, 0])
+      expect(targetPhase(s, i)).toBe(9)
     }
     const hand = [...nums(5, 5, 5, 5, 5, 9, 9, 9)] // a set of 5 and a set of 3: Phase 10
     let g = craftedGame(hand, { mode: 'reverse' })
     expect(error(g, { type: 'layDown', groups: [ids(hand.slice(0, 3)), ids(hand.slice(5, 8))] })).toMatch(/do not make Phase 10/i)
     g = run(g, { type: 'layDown', groups: [ids(hand.slice(0, 5)), ids(hand.slice(5, 8))] })
-    expect(g.players[0].laidPhase).toBe(9)
+    expect(g.players[0].laid).toBe(9)
     expect(g.players[0].done[9]).toBe(true)
-    expect(g.players[0].phase).toBe(1)
-    expect(targetPhase(g, g.players[0])).toBe(8) // Phase 9 comes next
+    expect(doneCount(g.players[0])).toBe(1)
+    expect(targetPhase(g, 0)).toBe(8) // Phase 9 comes next
     // The other player did not finish, so they try Phase 10 again.
     const next = nextRound(g)
-    expect(targetPhase(next, next.players[1])).toBe(9)
-    expect(targetPhase(next, next.players[0])).toBe(8)
+    expect(targetPhase(next, 1)).toBe(9)
+    expect(targetPhase(next, 0)).toBe(8)
   })
 
   it('records who laid down and who was shut out when a round ends', () => {
     const hand = twoSets()
     let s = craftedGame(hand, { mode: 'random' })
-    s.players[0].order = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    s.players[0].route = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     expect(s.drew).toEqual([false, false])
     s = run(s, { type: 'layDown', groups: [ids(hand.slice(0, 3)), ids(hand.slice(3, 6))] })
     const rec = s.scoreHistory[0]
@@ -270,7 +271,7 @@ describe('Random mode', () => {
   it('does not call someone shut out once they have drawn, even if they never laid down', () => {
     const hand = twoSets()
     let s = craftedGame(hand, { mode: 'random' })
-    s.players[0].order = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    s.players[0].route = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     s.drew[1] = true
     s = run(s, { type: 'layDown', groups: [ids(hand.slice(0, 3)), ids(hand.slice(3, 6))] })
     expect(s.scoreHistory[0].laid).toEqual([true, false])
@@ -286,19 +287,10 @@ describe('Random mode', () => {
     expect(s.drew[1 - first]).toBe(false)
   })
 
-  it('an older save that is mid round counts nobody as shut out', () => {
-    const s = createGame(TWO_PLAYERS, 2)
-    const old = structuredClone(s) as unknown as Record<string, unknown>
-    delete old.drew
-    const up = upgradeSavedState(old as unknown as GameState)
-    expect(up.drew).toEqual([true, true])
-  })
-
   describe('discardLastCard', () => {
     const laidDown = (hand: Card[], setups = TWO_PLAYERS) => {
       const s = craftedGame(hand, { setups })
-      s.players[0].laidDown = true
-      s.players[0].laidPhase = 0
+      s.players[0].laid = 0
       s.melds.push({ id: 90, owner: 0, kind: 'run', start: 5, end: 8, cards: nums(5, 6, 7, 8) })
       return s
     }
@@ -340,14 +332,6 @@ describe('Random mode', () => {
       expect(discardLastCard(drawing, 0)).toBe(drawing)
     })
   })
-
-  it('upgrades an older save by giving it the plain order', () => {
-    const s = createGame(TWO_PLAYERS, 2)
-    const old = structuredClone(s) as unknown as { players: Array<Record<string, unknown>> }
-    for (const p of old.players) delete p.order
-    const up = upgradeSavedState(old as unknown as GameState)
-    expect(up.players[0].order).toEqual(identity)
-  })
 })
 
 /** Gives the player whose turn it is one hand and the other player another, ready to play. */
@@ -379,11 +363,8 @@ describe('score history', () => {
     expect(n.scoreHistory[1].totals[1]).toBe(15 + n.scoreHistory[1].points[1])
   })
 
-  it('is empty at the start and filled in for older saves', () => {
+  it('is empty at the start', () => {
     expect(createGame(TWO_PLAYERS, 4).scoreHistory).toEqual([])
-    const old = structuredClone(createGame(TWO_PLAYERS, 4)) as unknown as Record<string, unknown>
-    delete old.scoreHistory
-    expect(upgradeSavedState(old as unknown as GameState).scoreHistory).toEqual([])
   })
 })
 
@@ -435,25 +416,6 @@ describe('Skips do not stack', () => {
     s = plainTurn(s)
     expect(s.current).toBe(1)
   })
-
-  it('a saved game that stacked Skips is brought back to one lost turn', () => {
-    const s = createGame(THREE_PLAYERS, 5)
-    s.players[1].skipsPending = 2
-    expect(upgradeSavedState(s).players[1].skipsPending).toBe(1)
-  })
-
-  it('upgrades an older save that stored a yes/no flag', () => {
-    const s = createGame(THREE_PLAYERS, 5)
-    const old = structuredClone(s) as unknown as { players: Array<Record<string, unknown>> }
-    for (const p of old.players) {
-      delete p.skipsPending
-      p.skipped = false
-    }
-    old.players[1].skipped = true
-    const up = upgradeSavedState(old as unknown as GameState)
-    expect(up.players.map((p) => p.skipsPending)).toEqual([0, 1, 0])
-    expect('skipped' in up.players[1]).toBe(false)
-  })
 })
 
 describe('laying down a phase', () => {
@@ -468,7 +430,7 @@ describe('laying down a phase', () => {
     })
     expect(after.melds).toHaveLength(2)
     expect(after.melds.every((m) => m.owner === 0)).toBe(true)
-    expect(after.players[0].laidDown).toBe(true)
+    expect(hasLaidDown(after.players[0])).toBe(true)
     expect(after.players[0].hand).toHaveLength(3)
   })
 
@@ -688,8 +650,8 @@ describe('ending a round', () => {
     let s = craftedGame(hand)
     s = run(s, { type: 'layDown', groups: [ids(hand.slice(0, 3)), ids(hand.slice(3, 6))] })
     s = run(s, { type: 'discard', cardId: hand[6].id })
-    expect(s.players[0].phase).toBe(1)
-    expect(s.players[1].phase).toBe(0)
+    expect(doneCount(s.players[0])).toBe(1)
+    expect(doneCount(s.players[1])).toBe(0)
   })
 
   it('nextRound deals a fresh round and keeps phases and scores', () => {
@@ -701,9 +663,9 @@ describe('ending a round', () => {
     const next = nextRound(s)
     expect(next.status).toBe('playing')
     expect(next.round).toBe(2)
-    expect(next.players[0].phase).toBe(1)
+    expect(doneCount(next.players[0])).toBe(1)
     expect(next.players[1].score).toBe(20)
-    expect(next.players[0].laidDown).toBe(false)
+    expect(hasLaidDown(next.players[0])).toBe(false)
     expect(next.melds).toHaveLength(0)
     for (const p of next.players) expect(p.hand).toHaveLength(HAND_SIZE)
     expect(cardCount(next)).toBe(DECK_SIZE)
@@ -723,10 +685,9 @@ describe('winning the game', () => {
     let s = craftedGame(hand, { phase: 9 })
     s.players[0].score = scores[0]
     s.players[1].score = scores[1]
-    s.players[1].phase = 9
+    advance(s, 1, 9)
     s.players[1].done = s.players[1].done.map((_, i) => i < 9)
-    s.players[1].laidPhase = 9
-    s.players[1].laidDown = true // the other player also finished Phase 10 this round
+    s.players[1].laid = 9 // the other player also finished Phase 10 this round
     s.players[1].hand = loserHand
     s = run(s, {
       type: 'layDown',
@@ -772,7 +733,7 @@ describe('YouSee mode', () => {
     const hand = nines()
     const s = craftedGame(hand, { mode: 'yousee' })
     const laid = run(s, { type: 'layDown', groups: [ids(hand.slice(0, 5)), ids(hand.slice(5, 7))], phase: 8 })
-    expect(laid.players[0].laidPhase).toBe(8)
+    expect(laid.players[0].laid).toBe(8)
     expect(laid.melds).toHaveLength(2)
     expect(laid.log.at(-1)).toMatch(/Phase 9/)
   })
@@ -808,10 +769,10 @@ describe('YouSee mode', () => {
     s = run(s, { type: 'discard', cardId: s.players[0].hand[0].id })
     expect(s.status).toBe('roundOver')
     expect(s.players[0].done.map((d, i) => (d ? i : -1)).filter((i) => i >= 0)).toEqual([8])
-    expect(s.players[0].phase).toBe(1)
+    expect(doneCount(s.players[0])).toBe(1)
     // The next round starts with nothing laid down and the phase still recorded as done.
     const n = nextRound(s)
-    expect(n.players[0].laidPhase).toBeNull()
+    expect(n.players[0].laid).toBeNull()
     expect(n.players[0].done[8]).toBe(true)
   })
 
@@ -823,7 +784,7 @@ describe('YouSee mode', () => {
     s.players[0].hand = [num(1)]
     s.players[1].hand = [num(12)]
     s = run(s, { type: 'discard', cardId: s.players[0].hand[0].id })
-    expect(s.players[1].phase).toBe(0)
+    expect(doneCount(s.players[1])).toBe(0)
     expect(s.players[1].done.some(Boolean)).toBe(false)
   })
 
@@ -831,7 +792,6 @@ describe('YouSee mode', () => {
     const hand = [...nums(5, 5, 5, 5, 5), num(9, 'blue'), num(9, 'green')]
     let s = craftedGame(hand, { mode: 'yousee' })
     s.players[0].done = s.players[0].done.map((_, i) => i !== 8)
-    s.players[0].phase = 9
     s = run(s, { type: 'layDown', groups: [ids(hand.slice(0, 5)), ids(hand.slice(5, 7))], phase: 8 })
     expect(s.status).toBe('gameOver')
     expect(s.winners).toEqual([0])
@@ -842,30 +802,6 @@ describe('YouSee mode', () => {
     const hand = [...nums(1, 1, 1, 2, 2, 2), num(7)]
     const s = craftedGame(hand)
     const laid = run(s, { type: 'layDown', groups: [ids(hand.slice(0, 3)), ids(hand.slice(3, 6))], phase: 8 })
-    expect(laid.players[0].laidPhase).toBe(0)
-  })
-})
-
-describe('upgradeSavedState', () => {
-  it('fills in the fields an older save is missing', () => {
-    const s = createGame(TWO_PLAYERS, 3) as Partial<GameState> & GameState
-    const old = structuredClone(s) as unknown as Record<string, unknown>
-    delete old.mode
-    delete old.events
-    delete old.hits
-    delete old.turnCount
-    const players = old.players as Array<Record<string, unknown>>
-    players[0].phase = 3
-    players[0].laidDown = true
-    for (const p of players) {
-      delete p.done
-      delete p.laidPhase
-    }
-    const up = upgradeSavedState(old as unknown as GameState)
-    expect(up.mode).toBe('classic')
-    expect(up.events).toEqual([])
-    expect(up.players[0].done.filter(Boolean)).toHaveLength(3)
-    expect(up.players[0].laidPhase).toBe(3)
-    expect(up.players[1].laidPhase).toBeNull()
+    expect(laid.players[0].laid).toBe(0)
   })
 })

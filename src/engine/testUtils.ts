@@ -2,7 +2,7 @@ import type { GroupSpec } from './phases'
 // Small helpers for building cards and crafted game states in tests.
 
 import type { Card, Color, NumberCard, SkipCard, WildCard } from './cards'
-import { createGame } from './game'
+import { createGame, targetPhase } from './game'
 import type { GameMode, GameState, PlayerSetup } from './game'
 
 let nextTestId = 10_000
@@ -45,13 +45,21 @@ export function craftedGame(
   s.stage = 'play'
   for (const p of s.players) p.skipsPending = 0
   s.players[player].hand = hand
-  s.players[player].phase = phase
-  // In classic mode the earlier phases are done. In yousee, tests set `done` themselves.
-  if (mode === 'classic' || mode === 'reverse') {
-    const finished = s.players[player].order.slice(0, phase)
-    s.players[player].done = s.players[player].done.map((_, i) => finished.includes(i))
-  }
+  // The earlier phases on the player's route are done. In yousee, tests set `done` themselves.
+  advance(s, player, phase)
   return s
+}
+
+/** Marks the first `count` phases on a player's route as done, and the rest as not done. */
+export function advance(s: GameState, who: number, count: number): void {
+  const p = s.players[who]
+  const finished = p.route.slice(0, count)
+  p.done = p.done.map((_, i) => finished.includes(i))
+}
+
+/** Marks a player as having laid down this round: the phase given, or the one they are on. */
+export function markLaid(s: GameState, who: number, phase?: number): void {
+  s.players[who].laid = phase ?? targetPhase(s, who) ?? 0
 }
 
 /** The group names the tests use ('parity', 'colorRun' and 'rainbow' are runs with a switch on). */

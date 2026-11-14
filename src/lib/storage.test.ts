@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest'
-import { parseLevel, parseSettings } from './storage'
+import { describe, expect, it, vi } from 'vitest'
+import { createGame } from '../engine'
+import { SAVE_VERSION } from './saveVersion'
+import { loadSession, parseLevel, parseSettings, saveSession } from './storage'
 
 describe('parseSettings', () => {
   it('keeps a valid phase set and drops an unknown one', () => {
@@ -55,5 +57,69 @@ describe('parseLevel', () => {
   it('rejects anything else', () => {
     expect(parseLevel('hard')).toBeUndefined()
     expect(parseLevel(undefined)).toBeUndefined()
+  })
+})
+
+describe('saved games', () => {
+  function fakeStorage(): Map<string, string> {
+    const data = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => void data.set(k, v),
+      removeItem: (k: string) => void data.delete(k),
+    })
+    return data
+  }
+  const players = [
+    { name: 'Ann', isBot: false },
+    { name: 'Bot', isBot: true },
+  ]
+
+  it('saves under the current save version and reads the game back', () => {
+    const data = fakeStorage()
+    const state = createGame(players, 4, 'random', 'alternate')
+    saveSession({ state, level: 'medium' })
+    expect([...data.keys()]).toEqual([`fase-ten:session:v${SAVE_VERSION}`])
+    expect(loadSession()).toEqual({ state, level: 'medium' })
+    vi.unstubAllGlobals()
+  })
+
+  it('does not open a game saved by an earlier version, and clears it away', () => {
+    const data = fakeStorage()
+    // What version 1 stored: players had phase, order, laidPhase and laidDown instead of route and laid.
+    const old = structuredClone(createGame(players, 4)) as unknown as { players: Array<Record<string, unknown>> }
+    for (const p of old.players) {
+      p.order = p.route
+      p.phase = 0
+      p.laidPhase = null
+      p.laidDown = false
+      delete p.route
+      delete p.laid
+    }
+    data.set('fase-ten:session:v1', JSON.stringify({ state: old, level: 'expert' }))
+    expect(loadSession()).toBeNull()
+    expect(data.has('fase-ten:session:v1')).toBe(false)
+    vi.unstubAllGlobals()
+  })
+
+  it('treats a game of the wrong shape as no game', () => {
+    const data = fakeStorage()
+    const key = `fase-ten:session:v${SAVE_VERSION}`
+    const good = createGame(players, 4)
+    const noRoute = structuredClone(good) as unknown as { players: Array<Record<string, unknown>> }
+    delete noRoute.players[0].route
+    data.set(key, JSON.stringify({ state: noRoute, level: 'easy' }))
+    expect(loadSession()).toBeNull()
+    data.set(key, JSON.stringify({ state: { ...good, phaseSet: 'single:x9' }, level: 'easy' }))
+    expect(loadSession()).toBeNull()
+    const short = structuredClone(good)
+    short.players[1].done = [false]
+    data.set(key, JSON.stringify({ state: short, level: 'easy' }))
+    expect(loadSession()).toBeNull()
+    data.set(key, 'not json')
+    expect(loadSession()).toBeNull()
+    data.set(key, JSON.stringify({ state: good, level: 'easy' }))
+    expect(loadSession()).not.toBeNull()
+    vi.unstubAllGlobals()
   })
 })

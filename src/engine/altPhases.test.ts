@@ -15,7 +15,7 @@ import {
   runEndsFor,
 } from './phases'
 import type { Meld, PhaseSet, RunBody } from './phases'
-import { applyAction, createGame, nextRound, upgradeSavedState } from './game'
+import { applyAction, createGame, nextRound } from './game'
 import type { GameState } from './game'
 import { createBot } from './bot'
 import { craftedGame, num, nums, wild } from './testUtils'
@@ -207,11 +207,8 @@ describe('a game using the alternate phases', () => {
     { name: 'Bot A', isBot: true },
   ]
 
-  it('defaults to the classic phases, and old saves are classic', () => {
+  it('defaults to the classic phases', () => {
     expect(createGame(players, 3).phaseSet).toBe('classic')
-    const old = structuredClone(createGame(players, 3)) as unknown as Record<string, unknown>
-    delete old.phaseSet
-    expect(upgradeSavedState(old as unknown as GameState).phaseSet).toBe('classic')
   })
 
   it('checks laid down cards against the alternate phase', () => {
