@@ -116,7 +116,7 @@ describe('bots play single rounds with no Wilds on some groups', () => {
   ]
   for (const code of ['s3-r4n', 's5n-r3', 'b8n', 'k4n-s2', 'c5n-s3n']) {
     it(`finishes ${code}`, () => {
-      let s = createGame(players, 21, 'single', `single:${code}` as PhaseSet)
+      let s = createGame(players, 21, 'classic', `single:${code}` as PhaseSet)
       const bot = createBot('expert', () => 0.5)
       let steps = 0
       while (s.status === 'playing' && steps++ < 30000) {

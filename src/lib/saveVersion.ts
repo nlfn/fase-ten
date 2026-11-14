@@ -4,7 +4,8 @@
 // The build writes this number to version.json next to the app. Before updating, the version that is
 // running reads that file from the server to see whether the new version still reads its saved game.
 
-export const SAVE_VERSION = 1
+// 1: the first shape. 2: one progress record per player (route, done, laid), phase lists of any length.
+export const SAVE_VERSION = 2
 
 /** none: safe to update. ends: the game in progress will be lost. unknown: could not find out. */
 export type UpdateRisk = 'none' | 'ends' | 'unknown'

@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { DECK_SIZE, nextRandom } from './cards'
 import { createBot, recall } from './bot'
 import type { Bot, BotLevel } from './bot'
-import { applyAction, createGame, nextRound } from './game'
+import { applyAction, createGame, doneCount, nextRound } from './game'
 import type { GameMode, GameState, PlayEvent, PlayerSetup } from './game'
-import { THREE_PLAYERS, craftedGame, ids, num, nums, skip, wild } from './testUtils'
+import { THREE_PLAYERS, advance, craftedGame, ids, markLaid, num, nums, skip, wild } from './testUtils'
 
 function seededRandom(seed: number): () => number {
   let s = seed >>> 0
@@ -143,7 +143,7 @@ describe('full games between bots', () => {
         const { state, rounds } = playGame(levels, seed)
         expect(state.status).toBe('gameOver')
         expect(state.winners.length).toBeGreaterThan(0)
-        for (const w of state.winners) expect(state.players[w].phase).toBe(10)
+        for (const w of state.winners) expect(doneCount(state.players[w])).toBe(10)
         expect(rounds).toBeGreaterThanOrEqual(10) // at least one phase per round
       }
     }, 60_000)
@@ -164,7 +164,7 @@ describe('full YouSee games between bots', () => {
         expect(state.winners.length).toBeGreaterThan(0)
         for (const w of state.winners) {
           expect(state.players[w].done.every(Boolean)).toBe(true)
-          expect(state.players[w].phase).toBe(10)
+          expect(doneCount(state.players[w])).toBe(10)
         }
         expect(rounds).toBeGreaterThanOrEqual(10)
       }
@@ -197,7 +197,7 @@ describe('full Random games between bots', () => {
       expect(state.status).toBe('gameOver')
       for (const w of state.winners) {
         expect(state.players[w].done.every(Boolean)).toBe(true)
-        expect(state.players[w].phase).toBe(10)
+        expect(doneCount(state.players[w])).toBe(10)
       }
     }
   }, 60_000)
@@ -211,7 +211,7 @@ describe('full Net Esaf games between bots', () => {
       expect(state.status).toBe('gameOver')
       for (const w of state.winners) {
         expect(state.players[w].done.every(Boolean)).toBe(true)
-        expect(state.players[w].phase).toBe(10)
+        expect(doneCount(state.players[w])).toBe(10)
       }
     }
   }, 60_000)
@@ -309,8 +309,7 @@ describe('bridging a run with Wilds', () => {
   // leave the 3 and 2 stuck.
   it('plays the Wilds on the run so the rest of the hand can follow, and goes out', () => {
     const s = craftedGame([wild(), wild(), ...nums(3, 2)], { setups: THREE_PLAYERS })
-    s.players[0].laidDown = true
-    s.players[0].laidPhase = 3
+    s.players[0].laid = 3
     s.melds.push({ id: 90, owner: 0, kind: 'run', start: 6, end: 12, cards: nums(6, 7, 8, 9, 10, 11, 12) })
     s.melds.push({ id: 91, owner: 1, kind: 'set', value: 10, cards: nums(10, 10, 10) })
     const bot = createBot('expert')
@@ -329,8 +328,7 @@ describe('bridging a run with Wilds', () => {
 
   it('Medium hits greedily and sends the Wilds to the set, stranding the 3 and 2', () => {
     const s = craftedGame([wild(), wild(), ...nums(3, 2)], { setups: THREE_PLAYERS })
-    s.players[0].laidDown = true
-    s.players[0].laidPhase = 3
+    s.players[0].laid = 3
     s.melds.push({ id: 90, owner: 0, kind: 'run', start: 6, end: 12, cards: nums(6, 7, 8, 9, 10, 11, 12) })
     s.melds.push({ id: 91, owner: 1, kind: 'set', value: 10, cards: nums(10, 10, 10) })
     const a = createBot('medium', () => 0.99).chooseAction(s)
@@ -339,7 +337,7 @@ describe('bridging a run with Wilds', () => {
 
   it('still puts spare Wilds on a set when there is nothing to bridge to', () => {
     const s = craftedGame([wild(), ...nums(1)], { setups: THREE_PLAYERS })
-    s.players[0].laidDown = true
+    markLaid(s, 0)
     s.melds.push({ id: 90, owner: 0, kind: 'run', start: 6, end: 12, cards: nums(6, 7, 8, 9, 10, 11, 12) })
     s.melds.push({ id: 91, owner: 1, kind: 'set', value: 10, cards: nums(10, 10, 10) })
     const a = createBot('expert').chooseAction(s)
@@ -349,7 +347,7 @@ describe('bridging a run with Wilds', () => {
   it('never leaves a card behind that a better order would have played', () => {
     // Wilds and naturals mixed on several groups: whatever order is chosen, every card gets played.
     const s = craftedGame([wild(), ...nums(5, 4, 3, 13 - 2)], { setups: THREE_PLAYERS })
-    s.players[0].laidDown = true
+    markLaid(s, 0)
     s.melds.push({ id: 90, owner: 0, kind: 'run', start: 7, end: 9, cards: nums(7, 8, 9) })
     s.melds.push({ id: 91, owner: 1, kind: 'set', value: 11, cards: nums(11, 11, 11) })
     const bot = createBot('expert')
@@ -374,8 +372,7 @@ describe('defense against an opponent who is nearly out', () => {
   const setup = (opponentCards: number, laidDown = true) => {
     const hand = [...nums(5, 5, 5, 7, 7, 12, 4)]
     const s = craftedGame(hand, { player: 1 })
-    s.players[0].laidDown = laidDown
-    s.players[0].laidPhase = 0
+    s.players[0].laid = laidDown ? 0 : null
     s.players[0].hand = nums(...Array(opponentCards).fill(1))
     s.melds.push({ id: 99, owner: 0, kind: 'run', start: 9, end: 11, cards: nums(9, 10, 11) })
     return s
@@ -415,10 +412,10 @@ describe('defense against an opponent who is nearly out', () => {
 
   it('aims a Skip at the nearly out player even over a stronger looking opponent', () => {
     const s = craftedGame([...nums(5, 5, 5, 7, 7, 4), skip()], { player: 1, setups: THREE_PLAYERS })
-    s.players[0].laidDown = true
+    markLaid(s, 0)
     s.players[0].hand = nums(1)
-    s.players[2].laidDown = true
-    s.players[2].phase = 5
+    markLaid(s, 2)
+    advance(s, 2, 5)
     s.players[2].hand = nums(1, 2, 3, 4, 5, 6, 7, 8)
     const a = createBot('expert').chooseAction(s)
     expect(a).toMatchObject({ type: 'discard', skipTarget: 0 })
@@ -427,7 +424,7 @@ describe('defense against an opponent who is nearly out', () => {
 
   it('never Skips a player who is already losing a turn', () => {
     const s = craftedGame([...nums(5, 5, 5, 7, 7, 4), skip()], { player: 1, setups: THREE_PLAYERS })
-    s.players[0].laidDown = true
+    markLaid(s, 0)
     s.players[0].hand = nums(1)
     s.players[0].skipsPending = 1
     for (const level of ['expert', 'medium', 'easy'] as const) {
@@ -448,9 +445,9 @@ describe('defense against an opponent who is nearly out', () => {
 
   it('stops a player on their final phase before a nearly out opponent, at every level', () => {
     const s = craftedGame([...nums(5, 5, 5, 7, 7, 4), skip()], { player: 1, setups: THREE_PLAYERS })
-    s.players[0].laidDown = true
+    markLaid(s, 0)
     s.players[0].hand = nums(1)
-    s.players[2].phase = 9
+    advance(s, 2, 9)
     s.players[2].hand = nums(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
     for (const level of ['expert', 'medium', 'easy'] as const) {
       expect(createBot(level, () => 0.99).chooseAction(s)).toMatchObject({ type: 'discard', skipTarget: 2 })
@@ -459,10 +456,10 @@ describe('defense against an opponent who is nearly out', () => {
 
   it('warns early: a player with 8 phases done outranks one with 5 and a laid down hand', () => {
     const s = craftedGame([...nums(5, 5, 5, 7, 7, 4), skip()], { player: 1, setups: THREE_PLAYERS })
-    s.players[0].phase = 5
-    s.players[0].laidDown = true
+    advance(s, 0, 5)
+    markLaid(s, 0)
     s.players[0].hand = nums(1, 2, 3, 4, 5)
-    s.players[2].phase = 8
+    advance(s, 2, 8)
     s.players[2].hand = nums(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
     expect(createBot('medium', () => 0.99).chooseAction(s)).toMatchObject({ skipTarget: 2 })
   })

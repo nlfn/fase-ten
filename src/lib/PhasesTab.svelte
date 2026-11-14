@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { phasesOf, targetPhase } from '../engine'
+  import { doneCount, isSingleRound, phasesOf, targetPhase } from '../engine'
   import type { GameState } from '../engine'
 
   interface Props {
@@ -16,8 +16,8 @@
   function mark(playerIndex: number, phaseIndex: number): Mark {
     const p = game.players[playerIndex]
     if (p.done[phaseIndex]) return 'done'
-    if (p.laidDown && p.laidPhase === phaseIndex) return 'laid'
-    if (targetPhase(game, p) === phaseIndex) return 'now'
+    if (p.laid === phaseIndex) return 'laid'
+    if (targetPhase(game, playerIndex) === phaseIndex) return 'now'
     return 'open'
   }
 
@@ -30,7 +30,7 @@
   }
 </script>
 
-{#if game.mode === 'single'}
+{#if isSingleRound(game)}
   <p>
     Single round: {phases[0].description}. Whoever goes out first scores zero and wins. Use Quit to stop at any time.
   </p>
@@ -83,7 +83,7 @@
       <tr>
         <th scope="row">Completed</th>
         {#each game.players as p, i (i)}
-          <td class="total">{p.done.filter(Boolean).length} of {phases.length}</td>
+          <td class="total">{doneCount(p)} of {phases.length}</td>
         {/each}
       </tr>
     </tfoot>

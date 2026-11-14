@@ -14,9 +14,10 @@ import {
 import type { GroupSpec, PhaseSet } from './phases'
 import { group } from './testUtils'
 import type { GroupName } from './testUtils'
-import { applyAction, createGame, nextRound, targetPhase } from './game'
+import { applyAction, createGame, isSingleRound, nextRound, targetPhase } from './game'
 import { createBot } from './bot'
 import type { BotLevel } from './bot'
+import type { GameMode, PlayerSetup } from './game'
 
 const g = (kind: GroupName, size: number, parity?: 'even' | 'odd'): GroupSpec => group(kind, size, parity ? { parity } : {})
 
@@ -59,13 +60,21 @@ describe('phases as text', () => {
     expect(isPhaseSet('other')).toBe(false)
   })
 
-  it('a single round fills every slot with the one phase', () => {
-    const slots = phasesOf('single:s3-r4' as PhaseSet)
-    expect(slots).toHaveLength(10)
-    for (let i = 0; i < 10; i++) {
-      expect(phaseDescription(i, 'single:s3-r4' as PhaseSet)).toBe('1 set of 3 + 1 run of 4')
-      expect(phaseSize(i, 'single:s3-r4' as PhaseSet)).toBe(7)
-    }
+  it('a single round is a list of one phase', () => {
+    const list = phasesOf('single:s3-r4' as PhaseSet)
+    expect(list).toHaveLength(1)
+    expect(phaseDescription(0, 'single:s3-r4' as PhaseSet)).toBe('1 set of 3 + 1 run of 4')
+    expect(phaseSize(0, 'single:s3-r4' as PhaseSet)).toBe(7)
+    expect(isPhaseSet('single:s3-r4,s3')).toBe(false) // one phase only
+  })
+
+  it('a list can be any length', () => {
+    const set = 'list:s3-s3,r7,c7' as PhaseSet
+    expect(isPhaseSet(set)).toBe(true)
+    expect(phasesOf(set).map((p) => p.description)).toEqual(['2 sets of 3', '1 run of 7', '7 cards of one color'])
+    expect(phasesOf(set).map((p) => p.number)).toEqual([1, 2, 3])
+    expect(isPhaseSet('list:s3-s3,x9')).toBe(false)
+    expect(isPhaseSet('list:')).toBe(false)
   })
 })
 
@@ -77,15 +86,18 @@ describe('a single round game', () => {
   ]
 
   it('starts everyone on the one phase', () => {
-    const s = createGame(players, 5, 'single', 'single:s3-s3')
-    for (const p of s.players) {
-      expect(targetPhase(s, p)).toBe(9)
-      expect(p.done.filter(Boolean)).toHaveLength(9)
+    const s = createGame(players, 5, 'classic', 'single:s3-s3')
+    expect(isSingleRound(s)).toBe(true)
+    for (const [i, p] of s.players.entries()) {
+      // A single round is a list of one phase, with nothing marked done to get there.
+      expect(targetPhase(s, i)).toBe(0)
+      expect(p.done).toEqual([false])
+      expect(p.route).toEqual([0])
     }
   })
 
   function play(code: string, level: BotLevel, seed: number) {
-    let s = createGame(players, seed, 'single', `single:${code}` as PhaseSet)
+    let s = createGame(players, seed, 'classic', `single:${code}` as PhaseSet)
     const bot = createBot(level, () => 0.5)
     let steps = 0
     while (s.status === 'playing' && steps++ < 20000) {
@@ -116,5 +128,61 @@ describe('a single round game', () => {
   it('does not offer a next round', () => {
     const s = play('s3-s3', 'expert', 3)
     expect(nextRound(s)).toBe(s)
+  })
+})
+
+describe('games of any length', () => {
+  const players: PlayerSetup[] = [
+    { name: 'Bot A', isBot: true },
+    { name: 'Bot B', isBot: true },
+    { name: 'Bot C', isBot: true },
+  ]
+
+  function playOut(mode: GameMode, set: PhaseSet, seed: number) {
+    let s = createGame(players, seed, mode, set)
+    const bot = createBot('expert', () => 0.5)
+    let steps = 0
+    while (s.status !== 'gameOver' && steps++ < 60000) {
+      if (s.status === 'roundOver') {
+        s = nextRound(s)
+        continue
+      }
+      const r = applyAction(s, bot.chooseAction(s))
+      if (!r.ok) throw new Error(`${set} ${mode}: ${r.error}`)
+      s = r.state
+    }
+    return s
+  }
+
+  it('a three phase game ends when someone has done all three, in every ordering', () => {
+    const set = 'list:s3-s3,r7,c7' as PhaseSet
+    for (const mode of ['classic', 'yousee', 'random', 'reverse'] as const) {
+      for (let seed = 1; seed <= 4; seed++) {
+        const s = playOut(mode, set, seed)
+        expect(s.status).toBe('gameOver')
+        expect(s.round).toBeGreaterThanOrEqual(3)
+        for (const p of s.players) {
+          expect(p.done).toHaveLength(3)
+          expect([...p.route].sort()).toEqual([0, 1, 2])
+        }
+        for (const w of s.winners) expect(s.players[w].done.every(Boolean)).toBe(true)
+      }
+    }
+  })
+
+  it('reverse and random routes cover a short list', () => {
+    const set = 'list:s3-s3,r7,c7' as PhaseSet
+    expect(createGame(players, 1, 'reverse', set).players[0].route).toEqual([2, 1, 0])
+    const routes = new Set<string>()
+    for (let seed = 1; seed <= 30; seed++) routes.add(createGame(players, seed, 'random', set).players[0].route.join(''))
+    expect(routes.size).toBeGreaterThan(3)
+  })
+
+  it('a twelve phase game works too', () => {
+    const set = `list:${[...PHASES.map((p) => encodeGroups(p.groups)), 's3-s3-s3', 'r10'].join(',')}` as PhaseSet
+    const s = playOut('classic', set, 2)
+    expect(s.status).toBe('gameOver')
+    expect(s.round).toBeGreaterThanOrEqual(12)
+    for (const w of s.winners) expect(s.players[w].done.filter(Boolean)).toHaveLength(12)
   })
 })

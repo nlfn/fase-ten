@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ALTERNATE_CANDIDATES, ALTERNATE_PHASES, PHASES, decodeGroups, describeGroups, encodeGroups, phasesOf, phaseDescription, targetPhase } from '../engine'
+  import { ALTERNATE_CANDIDATES, ALTERNATE_PHASES, PHASES, decodeGroups, describeGroups, encodeGroups, phasesOf, phaseCount, phaseDescription, doneCount, isSingleRound, targetPhase } from '../engine'
   import type { BotLevel, GameMode, GroupSpec, PhaseSet } from '../engine'
   import UpdateBanner from './UpdateBanner.svelte'
   import WhatsNew from './WhatsNew.svelte'
@@ -36,7 +36,7 @@
   let name = $state(last.name ?? 'You')
   let opponents = $state<1 | 2 | 3>(last.opponents ?? 1)
   let level = $state<BotLevel>(last.level ?? 'medium')
-  let mode = $state<Exclude<GameMode, 'single'>>(last.mode && last.mode !== 'single' ? last.mode : 'classic')
+  let mode = $state<GameMode>(last.mode ?? 'classic')
   let phaseKind = $state<'classic' | 'alternate' | 'single'>(last.single ? 'single' : last.phaseSet === 'alternate' ? 'alternate' : 'classic')
   const phaseSet = $derived<PhaseSet>(phaseKind === 'alternate' ? 'alternate' : 'classic')
   // A link such as ?phase=s3-r4 opens on that phase as a single round.
@@ -112,11 +112,11 @@
     const me = saved.state.players[0]
     if (saved.state.tiebreak) return 'Tiebreaker for the win'
     if (saved.state.tieNext) return 'Tiebreaker about to begin'
+    if (isSingleRound(saved.state)) return `Single round: ${phaseDescription(0, saved.state.phaseSet)}`
     if (saved.state.mode === 'yousee') {
-      return `You Pick, round ${saved.state.round}, ${me.phase} of 10 phases done`
+      return `You Pick, round ${saved.state.round}, ${doneCount(me)} of ${phaseCount(saved.state)} phases done`
     }
-    if (saved.state.mode === 'single') return `Single round: ${phaseDescription(0, saved.state.phaseSet)}`
-    const target = targetPhase(saved.state, me)
+    const target = targetPhase(saved.state, 0)
     const label =
       saved.state.mode === 'random' ? 'Random, round' : saved.state.mode === 'reverse' ? 'Backwards, round' : 'Round'
     return `${label} ${saved.state.round}, you are on Phase ${(target ?? 0) + 1}`
@@ -131,7 +131,8 @@
       name: trimmed,
       opponents,
       level,
-      mode: single ? 'single' : mode,
+      // A single round is a list of one phase, so the ordering makes no difference to it.
+      mode: single ? 'classic' : mode,
       phaseSet: single ? `single:${singlePhase}` : phaseSet,
     })
   }

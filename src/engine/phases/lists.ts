@@ -5,10 +5,11 @@ import { color, colorRun, evens, odds, pureRun, rainbow, run, set } from './spec
 import type { GroupSpec } from './spec'
 
 /**
- * Which list of ten phases a game uses. 'single:<code>' is a single round: all ten slots hold the one phase
- * that the code describes (see encodeGroups), so a game can be saved and restored from the string alone.
+ * Which list of phases a game uses, as a string, so a game can be saved and restored from it alone.
+ * 'single:<code>' is a list of one phase (a single round), and 'list:<code>,<code>,...' is any list at
+ * all. The codes are the ones encodeGroups writes.
  */
-export type PhaseSet = 'classic' | 'alternate' | `single:${string}`
+export type PhaseSet = 'classic' | 'alternate' | `single:${string}` | `list:${string}`
 
 export interface PhaseDef {
   number: number
@@ -28,8 +29,6 @@ export const PHASES: readonly PhaseDef[] = [
   { number: 9, groups: [set(5), set(2)], description: '1 set of 5 + 1 set of 2' },
   { number: 10, groups: [set(5), set(3)], description: '1 set of 5 + 1 set of 3' },
 ]
-
-export const PHASE_COUNT = PHASES.length
 
 /** Every alternate phase being considered, in no particular order. The game uses ten of them (see ALTERNATE_PHASES). */
 export const ALTERNATE_CANDIDATES: readonly PhaseDef[] = [
@@ -111,28 +110,44 @@ export function describeGroups(groups: readonly GroupSpec[]): string {
   return KNOWN.get(encodeGroups(groups)) ?? nameGroups(groups)
 }
 
-const singleCache = new Map<string, readonly PhaseDef[]>()
+/** The most phases a list can have. */
+export const MAX_PHASES = 30
 
-/** The ten identical slots of a single round game, or null if the code is not a valid phase. */
-function singleDefs(code: string): readonly PhaseDef[] | null {
-  const cached = singleCache.get(code)
+const listCache = new Map<string, readonly PhaseDef[]>()
+
+/** The phases a comma-separated list of codes describes, or null if any of them is not a valid phase. */
+function listDefs(codes: string): readonly PhaseDef[] | null {
+  const cached = listCache.get(codes)
   if (cached) return cached
-  const groups = decodeGroups(code)
-  if (!groups) return null
-  const description = describeGroups(groups)
-  const defs = Array.from({ length: PHASE_COUNT }, (_, i): PhaseDef => ({ number: i + 1, groups, description }))
-  singleCache.set(code, defs)
+  const parts = codes.split(',')
+  if (parts.length > MAX_PHASES) return null
+  const defs: PhaseDef[] = []
+  for (const code of parts) {
+    const groups = decodeGroups(code)
+    if (!groups) return null
+    defs.push({ number: defs.length + 1, groups, description: describeGroups(groups) })
+  }
+  listCache.set(codes, defs)
   return defs
 }
 
+/** The part of a set string after 'single:' or 'list:', or null for the named lists. */
+function codesOf(set: string): string | null {
+  if (set.startsWith('single:')) return set.slice(7).includes(',') ? '' : set.slice(7)
+  if (set.startsWith('list:')) return set.slice(5)
+  return null
+}
+
 export function defsOf(set: string): readonly PhaseDef[] {
-  if (set.startsWith('single:')) return singleDefs(set.slice(7)) ?? PHASES
+  const codes = codesOf(set)
+  if (codes !== null) return listDefs(codes) ?? PHASES
   return PHASE_SETS[set] ?? PHASES
 }
 
-/** True when the set string is a valid phase set for a game (a known list, or a single round with a good code). */
+/** True when the set string is a valid phase set for a game (a known list, or codes that all describe a phase). */
 export function isPhaseSet(set: string): set is PhaseSet {
-  return set === 'classic' || set === 'alternate' || (set.startsWith('single:') && singleDefs(set.slice(7)) !== null)
+  const codes = codesOf(set)
+  return codes === null ? set === 'classic' || set === 'alternate' : listDefs(codes) !== null
 }
 
 export function phasesOf(set: PhaseSet): readonly PhaseDef[] {

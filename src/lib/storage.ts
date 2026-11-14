@@ -1,9 +1,14 @@
 // Saves the game in the browser so a refresh or a closed tab does not lose it.
 
-import { decodeGroups, upgradeSavedState } from '../engine'
+import { decodeGroups, isPhaseSet, phasesOf } from '../engine'
 import type { BotLevel, GameMode, GameState, PhaseSet } from '../engine'
 
-const KEY = 'fase-ten:session:v1'
+import { SAVE_VERSION } from './saveVersion'
+
+// The key carries the save version, so a game saved by a version with another shape is simply not found.
+const KEY = `fase-ten:session:v${SAVE_VERSION}`
+/** Keys of earlier save versions. Their games cannot be read any more, so they are cleared away. */
+const OLD_KEYS = Array.from({ length: SAVE_VERSION - 1 }, (_, i) => `fase-ten:session:v${i + 1}`)
 
 /** Reads a stored level. Games saved before the levels were renamed called today's expert "normal". */
 export function parseLevel(raw: unknown): BotLevel | undefined {
@@ -18,6 +23,7 @@ export interface Session {
 
 export function loadSession(): Session | null {
   try {
+    for (const old of OLD_KEYS) localStorage.removeItem(old)
     const raw = localStorage.getItem(KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as Partial<Session>
@@ -32,8 +38,13 @@ export function loadSession(): Session | null {
       return null
     }
     if (state.status === 'gameOver') return null
-    // Games saved by an earlier version are missing newer fields.
-    upgradeSavedState(state)
+    // Anything that does not look like a game of this version is treated as no game at all.
+    if (typeof state.phaseSet !== 'string' || !isPhaseSet(state.phaseSet)) return null
+    const count = phasesOf(state.phaseSet).length
+    for (const p of state.players) {
+      if (!p || !Array.isArray(p.hand) || !Array.isArray(p.route) || !Array.isArray(p.done)) return null
+      if (p.route.length !== count || p.done.length !== count) return null
+    }
     return { state, level: parseLevel(parsed.level)! }
   } catch {
     return null

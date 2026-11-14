@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { HAND_SIZE } from './cards'
-import { applyAction, createGame, isSittingOut, nextRound, targetPhase, upgradeSavedState } from './game'
+import { applyAction, createGame, doneCount, isSittingOut, nextRound, openPhases, targetPhase } from './game'
 import type { Action, GameMode, GameState, PlayerSetup } from './game'
 import { createBot } from './bot'
 import { craftedGame, ids, num, nums, skip } from './testUtils'
@@ -34,10 +34,8 @@ function humanTie(setups: PlayerSetup[] = HUMAN_AND_BOT, mode: GameMode = 'class
   const t = craftedGame(hand, { setups, phase: 9, mode })
   for (const p of t.players) p.score = 50
   const other = t.players[1]
-  other.phase = 9
-  other.done = other.done.map((_, k) => k !== other.order[9])
-  other.laidDown = true
-  other.laidPhase = other.order[9]
+  other.done = other.done.map((_, k) => k !== other.route[9])
+  other.laid = other.route[9]
   other.hand = []
   if (t.players[2]) t.players[2].score = 200
   const groups = [ids(hand.slice(0, 5)), ids(hand.slice(5, 8))]
@@ -61,10 +59,8 @@ describe('a tie between computer players only', () => {
       const hand = phaseTen()
       const t = craftedGame(hand, { setups: TWO_BOTS, phase: 9, seed })
       for (const p of t.players) p.score = 50
-      t.players[1].phase = 9
       t.players[1].done = t.players[1].done.map((_, k) => k < 9)
-      t.players[1].laidDown = true
-      t.players[1].laidPhase = 9
+      t.players[1].laid = 9
       t.players[1].hand = []
       const laid = run(t, { type: 'layDown', groups: [ids(hand.slice(0, 5)), ids(hand.slice(5, 8))] })
       seen.add(run(laid, { type: 'discard', cardId: hand[8].id }).winners[0])
@@ -87,7 +83,7 @@ describe('tiebreaker round', () => {
     const s = nextRound(before)
     expect(s.status).toBe('playing')
     expect(s.round).toBe(before.round)
-    expect(s.tiebreak).toEqual([0, 1])
+    expect(s.tiebreak?.map((e) => e.player)).toEqual([0, 1])
     expect(s.tieNext).toBeNull()
     expect(s.scoreHistory).toHaveLength(before.scoreHistory.length)
     expect(s.players[0].hand).toHaveLength(HAND_SIZE)
@@ -95,8 +91,8 @@ describe('tiebreaker round', () => {
     expect(s.players[2].hand).toHaveLength(0)
     expect(isSittingOut(s, 2)).toBe(true)
     expect(isSittingOut(s, 0)).toBe(false)
-    expect(targetPhase(s, s.players[0])).toBe(9)
-    expect(targetPhase(s, s.players[1])).toBe(9)
+    expect(targetPhase(s, 0)).toBe(9)
+    expect(targetPhase(s, 1)).toBe(9)
     expect(s.current).not.toBe(2)
   })
 
@@ -115,8 +111,8 @@ describe('tiebreaker round', () => {
     expect(s.players.map((p) => p.score)).toEqual(scores)
     expect(s.scoreHistory).toHaveLength(history)
     expect(s.roundResult?.tie).toEqual({ players: [0, 1], how: 'round' })
-    expect(s.players[0].phase).toBe(10)
-    expect(s.players[1].phase).toBe(10)
+    expect(doneCount(s.players[0])).toBe(10)
+    expect(doneCount(s.players[1])).toBe(10)
   })
 
   it('a player sitting out is never given a turn, and a Skip never targets them', () => {
@@ -162,8 +158,7 @@ describe('tiebreaker round', () => {
     s.status = 'roundOver'
     s.tieNext = []
     for (const [i, p] of s.players.entries()) {
-      const last = mode === 'yousee' ? 3 + i : p.order[9]
-      p.phase = 10
+      const last = mode === 'yousee' ? 3 + i : p.route[9]
       p.done = p.done.map(() => true)
       p.score = 40
       s.tieNext.push({ player: i, phase: last })
@@ -176,18 +171,21 @@ describe('tiebreaker round', () => {
       const before = tiedAfterRound(mode)
       const s = nextRound(before)
       for (const [i, p] of s.players.entries()) {
-        expect(targetPhase(s, p)).toBe(before.tieNext![i].phase)
-        expect(p.done.filter((d) => !d)).toHaveLength(1)
+        expect(targetPhase(s, i)).toBe(before.tieNext![i].phase)
+        // The tiebreaker changes nobody's progress: they have finished, and stay finished.
+        expect(p.done.every(Boolean)).toBe(true)
+        expect(p.route).toEqual(before.players[i].route)
       }
     }
   })
 
-  it('in YouSee the only phase left is the final one', () => {
+  it('in YouSee the only phase open is the final one', () => {
     const before = tiedAfterRound('yousee')
     const s = nextRound(before)
     for (const [i, p] of s.players.entries()) {
-      expect(p.done.filter((d) => !d)).toHaveLength(1)
-      expect(p.done[before.tieNext![i].phase]).toBe(false)
+      expect(openPhases(s, i)).toEqual([before.tieNext![i].phase])
+      expect(targetPhase(s, i)).toBe(before.tieNext![i].phase)
+      expect(p.done.every(Boolean)).toBe(true)
     }
   })
 
@@ -207,15 +205,6 @@ describe('tiebreaker round', () => {
       expect([0, 1]).toContain(s.winners[0])
       expect(s.winners).toHaveLength(1)
     }
-  })
-
-  it('old saved games get the new fields', () => {
-    const old = structuredClone(createGame(HUMAN_AND_BOT, 3)) as unknown as Record<string, unknown>
-    delete old.tiebreak
-    delete old.tieNext
-    const up = upgradeSavedState(old as unknown as GameState)
-    expect(up.tiebreak).toBeNull()
-    expect(up.tieNext).toBeNull()
   })
 })
 

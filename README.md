@@ -43,6 +43,14 @@ src/lib/       The Svelte interface
 
 The engine is the important part. Everything a player does is an action (`drawDeck`, `drawDiscard`, `layDown`, `hit`, `discard`) passed to `applyAction(state, action)`, which returns a new state or an error message. Human clicks and bots use exactly the same path, so a bot can never do anything a person could not.
 
+## Game state
+
+A game is plain data (`GameState` in `game.ts`), saved as it is.
+
+- **The phase list** is `phaseSet`, a string: `classic`, `alternate`, `single:<code>` (one phase) or `list:<code>,<code>,...` (any list, up to 30 phases). Nothing in the engine assumes ten. The welcome screen only offers the first three, but a game of 3 or 12 phases plays to the end in every ordering (see the tests).
+- **Progress** is three fields on each player: `route` (the order they take the phases in), `done` (which phases they have completed) and `laid` (the phase laid down this round, or null). Everything else is worked out from those: `doneCount(player)`, `hasLaidDown(player)`, `targetPhase(state, who)` for the phase someone is working on, and `openPhases(state, who)` for the phases they may lay down this round (the next on their route, anything not done in You Pick, or the one phase they repeat in a tiebreaker).
+- **The ordering** is `mode`: `classic`, `reverse`, `random` or `yousee`.
+
 ## Rules as implemented
 
 - 108 cards: two of each number 1 to 12 in four colors, 8 Wilds, 4 Skips. Ten cards each.
@@ -52,7 +60,7 @@ The engine is the important part. Everything a player does is an action (`drawDe
 - Going out can happen by hitting or discarding your last card.
 - A discarded Skip makes the chosen player lose their next turn. Skips do not stack: a player who is already losing a turn cannot be skipped again. If the first card turned up is a Skip, the first player loses their turn.
 - Cards left in hand: 1 to 9 are 5 points, 10 to 12 are 10, Skip is 15, Wild is 25. The player who goes out scores 0.
-- You advance only if you laid down your phase. Finish Phase 10 to end the game; if several players finish in the same round, the lowest score wins. If the lowest score is tied and at least one person is among the tied players, they play a tiebreaker: each repeats their final phase in a fresh round (everyone else sits out), and the first to go out wins. No points are added. If only computer players are tied, the winner is drawn at random from the game's seed instead. In the engine this is `tieNext` (a pending tiebreaker) and `tiebreak` (the tied players while it is being played) on the game state.
+- You advance only if you laid down your phase. Finish Phase 10 to end the game; if several players finish in the same round, the lowest score wins. If the lowest score is tied and at least one person is among the tied players, they play a tiebreaker: each repeats their final phase in a fresh round (everyone else sits out), and the first to go out wins. No points are added. If only computer players are tied, the winner is drawn at random from the game's seed instead. In the engine this is `tieNext` (a pending tiebreaker) and `tiebreak` (the tied players and the phase each repeats, while it is being played) on the game state. A tiebreaker changes nobody's progress: the tied players have finished and stay finished.
 
 Choices where the official rules are loose or where I picked a house rule:
 
@@ -62,19 +70,19 @@ Choices where the official rules are loose or where I picked a house rule:
 
 ### You Pick (YouSee in the code)
 
-An alternate mode chosen on the welcome screen, played like Yahtzee. Nothing locks you to the next phase. When you lay down, you pick any of the ten phases you have not completed, and that choice is final once the cards are down. A phase counts as completed when the round ends, and only for players who laid down. The game ends the same way as classic: the first players to complete all ten phases, lowest score wins. The computer players take the biggest phase their hand can make. The **Phases** button opens a chart of what each player has completed. In the engine this is `mode: 'yousee'` on the game state, with `done` and `laidPhase` on each player and a `phase` field on the `layDown` action.
+An alternate mode chosen on the welcome screen, played like Yahtzee. Nothing locks you to the next phase. When you lay down, you pick any of the ten phases you have not completed, and that choice is final once the cards are down. A phase counts as completed when the round ends, and only for players who laid down. The game ends the same way as classic: the first players to complete all ten phases, lowest score wins. The computer players take the biggest phase their hand can make. The **Phases** button opens a chart of what each player has completed. In the engine this is `mode: 'yousee'` on the game state, and a `phase` field on the `layDown` action.
 
 ### Random
 
-A third mode. Like classic, but each player has their own secret random order for the ten phases, made when the game starts. You only ever see the phase each player is on right now (next to their name and on the Phases chart), never the upcoming ones. If a player does not lay down their phase in a round, they try the same phase again next round. In the engine this is `mode: 'random'` with a shuffled `order` on each player, and `targetPhase(state, player)` gives the phase someone is working on in classic and random games.
+A third mode. Like classic, but each player has their own secret random order for the ten phases, made when the game starts. You only ever see the phase each player is on right now (next to their name and on the Phases chart), never the upcoming ones. If a player does not lay down their phase in a round, they try the same phase again next round. In the engine this is `mode: 'random'` with a shuffled `route` on each player.
 
 ### Backwards (Net Esaf)
 
-A fourth mode, Fase Ten spelled backwards. Everyone starts on Phase 10 and works down to Phase 1, one phase at a time, and a missed phase is tried again next round. In the engine this is `mode: 'reverse'`: every player's `order` is the plain order reversed, so `targetPhase` does the rest.
+A fourth mode, Fase Ten spelled backwards. Everyone starts on Phase 10 and works down to Phase 1, one phase at a time, and a missed phase is tried again next round. In the engine this is `mode: 'reverse'`: every player's `route` is the list reversed.
 
 ### Single round
 
-A fifth way to play, picked under Phases on the welcome screen: one round on one phase from any list (classic, alternate, or the other candidates), with a picker. The game is over when the round ends, and whoever went out scores zero and wins. In the engine this is `mode: 'single'` with `phaseSet: 'single:<code>'`. The code spells out the groups of the phase (`s3-s3` is 2 sets of 3, `r4-s3` a run of 4 and a set of 3, `e5` a run of 5 evens, `k6` a color run of 6, `b8` a rainbow run of 8, `r6n` a run of 6 with no Wilds (`p6` still reads the same), `c7` 7 of one color, `o` for odds), so a saved game needs no lookup table. `encodeGroups`, `decodeGroups`, `describeGroups` and `groupsProblem` in `phases.ts` convert and check these codes. All ten slots hold that one phase and every player starts on the last one with the others marked done, so the existing "finish the last phase" rule ends the game.
+A fifth way to play, picked under Phases on the welcome screen: one round on one phase from any list (classic, alternate, or the other candidates), with a picker. The game is over when the round ends, and whoever went out scores zero and wins. In the engine this is `phaseSet: 'single:<code>'`, a list of one phase, so it needs no mode of its own: the first round completes the list. The code spells out the groups of the phase (`s3-s3` is 2 sets of 3, `r4-s3` a run of 4 and a set of 3, `e5` a run of 5 evens, `k6` a color run of 6, `b8` a rainbow run of 8, `r6n` a run of 6 with no Wilds (`p6` still reads the same), `c7` 7 of one color, `o` for odds), so a saved game needs no lookup table. `encodeGroups`, `decodeGroups`, `describeGroups` and `groupsProblem` in `phases.ts` convert and check these codes.
 
 ### Designing a phase
 
@@ -142,5 +150,7 @@ Phase 10 is a Mattel trademark. A private or hobby project is fine, but if you p
 The app is a PWA, so a phone keeps running the version it already has. It looks for a newer one when it opens, whenever it comes back to the foreground, and once an hour. When a new version has been downloaded, the welcome screen shows a "new version available" banner with an Update button, and an x that hides it for a day. The app never reloads by itself, and the banner is only on the welcome screen, so a game in progress is not interrupted. See `src/lib/updates.svelte.ts` and `UpdateBanner.svelte`.
 
 Most updates keep a game in progress. When a new version can no longer read the saved games of the one before, `SAVE_VERSION` in `src/lib/saveVersion.ts` goes up by one. The build writes that number to `version.json` next to the app, and the service worker does not keep that file, so it always comes from the server. When Update is tapped with a game in progress, the running version reads `version.json` first. If the number is different, the banner says "This update will end your current game" with Cancel and Update anyway, and Cancel leaves everything as it was. If the file cannot be read (offline), it says the update may end the game. With no game in progress, or the same number, Update works as before.
+
+Saved games are stored under a key that carries the save version (`fase-ten:session:v2`). A game saved under an earlier version is not converted: it is cleared away the first time the new version opens, and the What's new list says so. The save version is 2 since the progress fields above replaced `phase`, `order`, `laidPhase` and `laidDown`.
 
 After an update, the welcome screen also shows a "What's new" list of the changes since the last version that browser opened. The entries live in `src/lib/changelog.ts`: add one with the next number for any change worth mentioning (no em dashes, plain text). The newest number seen is kept in localStorage. A brand new player sees nothing, and a returning player who has never seen the list gets all of it once.

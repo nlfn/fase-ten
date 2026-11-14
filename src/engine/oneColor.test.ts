@@ -137,7 +137,7 @@ describe('bots play single rounds with one color groups', () => {
   ]
   for (const code of ['s2c-s2c-s2c', 'e4c-s3', 'o3c-s2c-s2', 's3c-r4', 'e2c-o2c-s2-s2-s2', 's2cn-s3']) {
     it(`finishes ${code}`, () => {
-      let s = createGame(players, 33, 'single', setOf(code))
+      let s = createGame(players, 33, 'classic', setOf(code))
       const bot = createBot('expert', () => 0.5)
       let steps = 0
       while (s.status === 'playing' && steps++ < 60000) {
