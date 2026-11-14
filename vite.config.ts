@@ -53,5 +53,7 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.ts'],
     environment: 'node',
+    // Some tests search thousands of hands. They take a few seconds here and longer on the build server.
+    testTimeout: 60_000,
   },
 })
