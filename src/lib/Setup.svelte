@@ -139,7 +139,7 @@
 
 <main class="setup">
   <WhatsNew bind:showAll={showChanges} />
-  <UpdateBanner />
+  <UpdateBanner gameInProgress={saved !== null} />
   <header>
     <h1>Fase Ten</h1>
     <p class="lead">Ten-phase rummy against the computer. Finish all ten phases before they do.</p>

@@ -13,6 +13,12 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 25,
+    date: '2026-11-14',
+    title: 'A warning before an update ends your game',
+    body: 'Most updates keep a game in progress. When one cannot, tapping Update now warns you first, and Cancel lets you finish your game before updating.',
+  },
+  {
     id: 24,
     date: '2026-11-13',
     title: 'One color on any group',

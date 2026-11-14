@@ -1,6 +1,7 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { defineConfig } from 'vitest/config'
 import { VitePWA } from 'vite-plugin-pwa'
+import { SAVE_VERSION } from './src/lib/saveVersion.ts'
 
 // Stamped into the app so the welcome screen can show which build you are running.
 // GitHub Actions provides the run number and commit; local builds just say "local".
@@ -18,6 +19,15 @@ export default defineConfig({
   base: './',
   plugins: [
     svelte(),
+    {
+      // version.json tells a running app whether the newest version can still read its saved game
+      // (see src/lib/saveVersion.ts). It is left out of the service worker's files on purpose, so it
+      // always comes from the server.
+      name: 'save-version-file',
+      generateBundle() {
+        this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ save: SAVE_VERSION }) + '\n' })
+      },
+    },
     VitePWA({
       // A new version waits until the player taps Update on the welcome screen, so a game in
       // progress is never reloaded underneath them. The app registers itself in src/lib/updates.svelte.ts.

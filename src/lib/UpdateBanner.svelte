@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { installUpdate, snoozeUpdate, updates } from './updates.svelte'
+  import { cancelUpdate, installUpdate, requestUpdate, snoozeUpdate, updates } from './updates.svelte'
+
+  interface Props {
+    /** A saved game is waiting on the welcome screen, so an update that cannot read it needs a warning first. */
+    gameInProgress?: boolean
+  }
+  let { gameInProgress = false }: Props = $props()
 </script>
 
 {#if updates.ready && (!updates.snoozed || updates.installing)}
@@ -7,9 +13,23 @@
     {#if updates.installing}
       <span class="spinner" aria-hidden="true"></span>
       <span>Updating...</span>
+    {:else if updates.warning}
+      <span class="warning">
+        <strong>{updates.warning === 'ends' ? 'This update will end your current game.' : 'This update may end your current game.'}</strong>
+        {updates.warning === 'ends'
+          ? 'Saved games from this version cannot be opened by the new one. Cancel to finish your game first.'
+          : 'The new version could not be checked just now. Cancel to finish your game first, or try again when you are online.'}
+      </span>
+      <span class="choices">
+        <button type="button" onclick={cancelUpdate}>Cancel</button>
+        <button type="button" class="danger" onclick={installUpdate}>Update anyway</button>
+      </span>
+    {:else if updates.checking}
+      <span class="spinner" aria-hidden="true"></span>
+      <span>Checking...</span>
     {:else}
       <span>A new version is available.</span>
-      <button type="button" class="primary" onclick={installUpdate}>Update</button>
+      <button type="button" class="primary" onclick={() => requestUpdate(gameInProgress)}>Update</button>
       <button type="button" class="close" aria-label="Hide this for now" onclick={snoozeUpdate}>&times;</button>
     {/if}
   </section>
@@ -50,6 +70,23 @@
     .update .spinner {
       animation-duration: 2.4s;
     }
+  }
+  .update .warning {
+    font-weight: 400;
+  }
+  .update .warning strong {
+    display: block;
+    margin-bottom: 0.15rem;
+  }
+  .update .choices {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .update .choices button {
+    padding: 0.5rem 0.9rem;
+    white-space: nowrap;
   }
   .close {
     padding: 0.3rem 0.65rem;
