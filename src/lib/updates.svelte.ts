@@ -2,6 +2,7 @@
 // reloads the page by itself: the welcome screen shows a banner and the player decides.
 
 import { registerSW } from 'virtual:pwa-register'
+import { SAVE_VERSION, parseSaveVersion, updateRisk } from './saveVersion'
 import { SNOOZE_KEY, isSnoozed, snoozeUntil } from './snooze'
 
 function readSnoozed(): boolean {
@@ -19,6 +20,13 @@ export const updates = $state({
   snoozed: readSnoozed(),
   /** Update was tapped and the page is about to reload. */
   installing: false,
+  /** Update was tapped with a game in progress, and the new version is being asked whether it can read it. */
+  checking: false,
+  /**
+   * Update was tapped but would (ends) or might (unknown) end the game in progress. The banner shows a
+   * warning, and nothing happens until the player confirms or cancels.
+   */
+  warning: null as null | 'ends' | 'unknown',
 })
 
 let applyUpdate: ((reload?: boolean) => Promise<void>) | undefined
@@ -57,9 +65,49 @@ const RELOAD_FALLBACK_MS = 8000
  */
 export function installUpdate(): void {
   if (updates.installing) return
+  updates.warning = null
   updates.installing = true
   void applyUpdate?.(true)
   setTimeout(() => window.location.reload(), RELOAD_FALLBACK_MS)
+}
+
+/** How long to wait for version.json before giving up. */
+const VERSION_TIMEOUT_MS = 4000
+
+/** The save version of the newest app on the server, or null if it cannot be read right now. */
+async function newestSaveVersion(): Promise<number | null> {
+  try {
+    // version.json is never kept by the service worker or the browser, so this is the server's answer.
+    const url = new URL('version.json', document.baseURI)
+    url.searchParams.set('t', String(Date.now()))
+    const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(VERSION_TIMEOUT_MS) })
+    return response.ok ? parseSaveVersion(await response.text()) : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The Update button. With no game in progress it updates at once. With one, it first asks whether the
+ * new version can still read the saved game, and if not (or if it cannot find out) it shows a warning
+ * and waits for the player to confirm or cancel.
+ */
+export async function requestUpdate(gameInProgress: boolean): Promise<void> {
+  if (updates.installing || updates.checking) return
+  if (!gameInProgress) {
+    installUpdate()
+    return
+  }
+  updates.checking = true
+  const risk = updateRisk(true, SAVE_VERSION, await newestSaveVersion())
+  updates.checking = false
+  if (risk === 'none') installUpdate()
+  else updates.warning = risk
+}
+
+/** Backs out of the warning. The game in progress is untouched and the banner goes back to normal. */
+export function cancelUpdate(): void {
+  updates.warning = null
 }
 
 /** Hides the banner for a day. */
