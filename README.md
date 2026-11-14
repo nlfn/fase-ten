@@ -26,7 +26,13 @@ On Android, open the site in Chrome and choose Install app (or Add to Home scree
 ```
 src/engine/    The game itself. Pure TypeScript, no UI code.
   cards.ts     Cards, 108-card deck, point values, seedable shuffle
-  phases.ts    The ten phases, set/run/color validation, hitting, solvers
+  phases.ts    One import for everything in phases/
+  phases/
+    spec.ts    What a phase asks for: groups of three kinds (set, run, color) with switches
+    codes.ts   Phases as text (s3-r4n) and their plain-English names
+    lists.ts   The classic and alternate lists, single rounds
+    melds.ts   Groups on the table: building them, checking a phase, hitting
+    solver.ts  Laying down the best way, and how many cards a hand is short
   game.ts      Game state, turn flow, actions, scoring, winning
   bot.ts       Computer players (easy, medium and expert)
   *.test.ts    Unit tests plus full bot-vs-bot games
@@ -90,7 +96,7 @@ A second list of ten phases, chosen on the welcome screen (`phaseSet: 'alternate
 9. 1 run of 10
 10. 1 color run of 6
 
-New kinds of group (all in `phases.ts`):
+New kinds of group. In the code every group is a set, a run or a color group, and these are runs with a switch on (`parity`, `oneColor`, `rainbow`, `noWild` in `phases/spec.ts`):
 
 - **Run of evens or odds** steps by two. A run of five evens is 2 to 10 or 4 to 12 and can grow by the next even number at either end. A run of six evens (2 to 12) or odds (1 to 11) is complete and takes no hits, not even a Wild.
 - **Color run** (a run in one color) only takes cards of that color (or a Wild) when hit.

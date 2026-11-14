@@ -1,3 +1,4 @@
+import type { GroupSpec } from './phases'
 // Small helpers for building cards and crafted game states in tests.
 
 import type { Card, Color, NumberCard, SkipCard, WildCard } from './cards'
@@ -51,4 +52,14 @@ export function craftedGame(
     s.players[player].done = s.players[player].done.map((_, i) => finished.includes(i))
   }
   return s
+}
+
+/** The group names the tests use ('parity', 'colorRun' and 'rainbow' are runs with a switch on). */
+export type GroupName = 'set' | 'run' | 'color' | 'parity' | 'colorRun' | 'rainbow'
+
+export function group(name: GroupName, size: number, extra: Partial<GroupSpec> = {}): GroupSpec {
+  if (name === 'colorRun') return { kind: 'run', size, oneColor: true, ...extra }
+  if (name === 'rainbow') return { kind: 'run', size, rainbow: true, ...extra }
+  if (name === 'parity') return { kind: 'run', size, ...extra }
+  return { kind: name, size, ...extra }
 }
