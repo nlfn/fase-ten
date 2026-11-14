@@ -32,7 +32,8 @@ src/engine/    The game itself. Pure TypeScript, no UI code.
     codes.ts   Phases as text (s3-r4n) and their plain-English names
     lists.ts   The classic and alternate lists, single rounds
     melds.ts   Groups on the table: building them, checking a phase, hitting
-    solver.ts  Laying down the best way, and how many cards a hand is short
+    solver.ts  Laying down: splitting chosen cards into groups, finding the best layout
+    missing.ts How many cards a hand is short of a phase (exact)
   game.ts      Game state, turn flow, actions, scoring, winning
   bot.ts       Computer players (easy, medium and expert)
   *.test.ts    Unit tests plus full bot-vs-bot games
@@ -77,9 +78,9 @@ A fifth way to play, picked under Phases on the welcome screen: one round on one
 
 ### Designing a phase
 
-Under Single, the Design button opens a builder: up to five groups (set, run, all one color, evens, odds, color run, rainbow run), each with a size and an optional No Wilds switch, up to ten cards in all (`groupsProblem` explains anything impossible, such as a rainbow run that is not a multiple of 4 or a set of 9 with no Wilds). `noWild` is a flag on any group: no Wilds may be used to lay that group down, though a Wild can be added to it once it is on the table. The estimate (`phaseMissing`) counts the strict groups as getting first pick of the naturals and never lets a Wild close a gap in one. Codes carry the flag as an `n` suffix (`s3-r4n` is a set of 3 and a run of 4 with no Wilds). The last phase picked is remembered, a named list lives under My phases (`fase-ten:custom-phases:v1`, on that device only), and a code or a link (`?phase=s3-r4n`) shares one.
+Under Single, the Design button opens a builder: up to five groups (set, run, all one color, evens, odds, color run, rainbow run), each with a size and an optional No Wilds switch, up to ten cards in all (`groupsProblem` explains anything impossible, such as a rainbow run that is not a multiple of 4 or a set of 9 with no Wilds). `noWild` is a flag on any group: no Wilds may be used to lay that group down, though a Wild can be added to it once it is on the table. `phaseMissing` never lets a Wild close a gap in one. Codes carry the flag as an `n` suffix (`s3-r4n` is a set of 3 and a run of 4 with no Wilds). The last phase picked is remembered, a named list lives under My phases (`fase-ten:custom-phases:v1`, on that device only), and a code or a link (`?phase=s3-r4n`) shares one.
 
-**One color** is a second switch on a group, like No Wilds: a set or a run of evens or odds can be marked `oneColor` (code suffix `c`, so `s2c` is a matched pair and `e4cn` is a run of 4 evens in one color with no Wilds). There are only 2 copies of a number in a color, so a one-color set holds 2 natural cards at most, and with No Wilds it cannot be bigger than 2. A plain run in one color is the color run kind (`k`, written `r4c` it is read as `k4`), and "All one color" is the `c` kind (cards of any numbers in one color, so the switch is always on). A rainbow run cannot be one color. The estimate tries leaving each color of a set for last whenever a phase has a one-color group, so a plain set does not steal the cards a matched pair needs. Names written for phases that are not on the lists put the switches in one set of parentheses, such as `1 set of 2 (one color, no wilds)` (an all one color group is still written `5 of one color`); the names on the lists are unchanged.
+**One color** is a second switch on a group, like No Wilds: a set or a run of evens or odds can be marked `oneColor` (code suffix `c`, so `s2c` is a matched pair and `e4cn` is a run of 4 evens in one color with no Wilds). There are only 2 copies of a number in a color, so a one-color set holds 2 natural cards at most, and with No Wilds it cannot be bigger than 2. A plain run in one color is the color run kind (`k`, written `r4c` it is read as `k4`), and "All one color" is the `c` kind (cards of any numbers in one color, so the switch is always on). A rainbow run cannot be one color. Names written for phases that are not on the lists put the switches in one set of parentheses, such as `1 set of 2 (one color, no wilds)` (an all one color group is still written `5 of one color`); the names on the lists are unchanged.
 
 ### Alternate phases
 
@@ -102,9 +103,13 @@ New kinds of group. In the code every group is a set, a run or a color group, an
 - **Color run** (a run in one color) only takes cards of that color (or a Wild) when hit.
 - **Rainbow run** (one of each color in a run of four, two of each in a run of eight; the word is drawn in the four colors in the Phases table) is checked when laid down, with Wilds filling the gaps. Afterwards it is an ordinary run, so any color can be added.
 - **Run of 6 (no Wilds)** cannot be laid down with a Wild in it. Wilds are only useful for adding to groups already on the table, so bots discard them before laying down (`allowsWilds`). Hitting with a Wild afterwards is allowed.
-- A phase can have up to five groups (five pairs is ten cards). With three or more groups the estimate is greedy, so `phaseMissing` asks the solver whenever it says a card is missing and the hand is big enough to hold the whole phase.
+- A phase can have up to five groups (five pairs is ten cards).
 
 How the ten were chosen: the candidates in `ALTERNATE_CANDIDATES` (about 40 of them) were simulated with three Expert bots at a table where everyone is on a random phase (several thousand rounds each). The measure is the share of players who laid down before the round ended. The ten above score about 85, 71, 74, 64, 64, 63, 63, 61, 63 and 48% (Easy bots: 85, 75, 70, 67, 59, 61, 62, 60, 56 and 48%), and the opener takes about 3 to 4 turns to lay down instead of 2. Classic ranges from 92% to 46%. The run of 6 in one color is kept as Phase 10 on purpose: it is the hardest, and right after the run of 10 (whoever lays that down goes out at once), so the last rounds have a single person going out rather than the same player repeatedly ending the round on someone who is already on the last phase. Swapping a phase means editing `ALTERNATE_ORDER`.
+
+### How far a hand is from a phase
+
+`phaseMissing(hand, phase, set)` in `phases/missing.ts` is the number the computer players steer by: the fewest cards that would have to be added to the hand before the phase could be laid down. It is exact for every phase the designer can make, so 0 always means the hand can lay down now. Every group aims at a target (a set of 7s, a run from 3 to 6, red), the most promising targets are tried first, and when two groups want the same card a small matching shares the cards out. A Wild fills any gap in a group that allows Wilds, but every group keeps one place for a natural card. Answers are remembered, since the bots ask about the same hands many times. `missing.test.ts` checks it against a slow search that shares none of its code.
 
 ## Computer players
 
