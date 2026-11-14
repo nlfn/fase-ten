@@ -12,12 +12,13 @@ import {
   phasesOf,
 } from './phases'
 import type { GroupSpec, PhaseSet } from './phases'
+import { group } from './testUtils'
+import type { GroupName } from './testUtils'
 import { applyAction, createGame, nextRound, targetPhase } from './game'
 import { createBot } from './bot'
 import type { BotLevel } from './bot'
 
-const g = (kind: GroupSpec['kind'], size: number, parity?: 'even' | 'odd'): GroupSpec =>
-  parity ? { kind, size, parity } : { kind, size }
+const g = (kind: GroupName, size: number, parity?: 'even' | 'odd'): GroupSpec => group(kind, size, parity ? { parity } : {})
 
 describe('phases as text', () => {
   it('round trips every known phase, and names it the way the lists do', () => {

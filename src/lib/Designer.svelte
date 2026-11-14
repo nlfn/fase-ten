@@ -28,24 +28,24 @@
   ]
 
   const choiceOf = (g: GroupSpec): Choice =>
-    g.kind === 'parity' ? (g.parity === 'odd' ? 'odd' : 'even') : g.kind === 'colorRun' ? 'run' : g.kind === 'color' ? 'any' : g.kind
-  /** A run in one color and an all one color group are their own kinds, so they count as one color here. */
-  const oneColorOf = (g: GroupSpec) => g.kind === 'colorRun' || g.kind === 'color' || !!g.oneColor
+    g.kind === 'set' ? 'set' : g.kind === 'color' ? 'any' : g.rainbow ? 'rainbow' : (g.parity ?? 'run')
+  /** An all one color group is one color by nature, so its switch shows as on. */
+  const oneColorOf = (g: GroupSpec) => g.kind === 'color' || !!g.oneColor
 
   function specOf(choice: Choice, size: number, oneColor: boolean, noWild: boolean): GroupSpec {
     let spec: GroupSpec
-    if (choice === 'even' || choice === 'odd') spec = { kind: 'parity', size: Math.min(size, 6), parity: choice === 'odd' ? 'odd' : 'even' }
-    else if (choice === 'rainbow') spec = { kind: 'rainbow', size: Math.max(4, Math.round(size / 4) * 4) }
+    if (choice === 'even' || choice === 'odd') spec = { kind: 'run', size: Math.min(size, 6), parity: choice }
+    else if (choice === 'rainbow') spec = { kind: 'run', size: Math.max(4, Math.round(size / 4) * 4), rainbow: true }
     else if (choice === 'any') spec = { kind: 'color', size }
-    else if (choice === 'run') spec = { kind: oneColor ? 'colorRun' : 'run', size }
-    else spec = { kind: 'set', size }
-    if (oneColor && (choice === 'set' || choice === 'even' || choice === 'odd')) spec.oneColor = true
+    else spec = { kind: choice, size }
+    // A rainbow run cannot be one color, and an all one color group needs no switch.
+    if (oneColor && choice !== 'rainbow' && choice !== 'any') spec.oneColor = true
     if (noWild) spec.noWild = true
     return spec
   }
 
-  const stepOf = (g: GroupSpec) => (g.kind === 'rainbow' ? 4 : 1)
-  const maxOf = (g: GroupSpec) => (g.kind === 'parity' ? 6 : g.kind === 'set' || g.kind === 'color' ? HAND_LIMIT : 12)
+  const stepOf = (g: GroupSpec) => (g.rainbow ? 4 : 1)
+  const maxOf = (g: GroupSpec) => (g.kind !== 'run' ? HAND_LIMIT : g.parity ? 6 : 12)
 
   // svelte-ignore state_referenced_locally
   let groups = $state<GroupSpec[]>(decodeGroups(startCode) ?? [{ kind: 'set', size: 3 }])
@@ -73,7 +73,7 @@
   function bump(i: number, direction: 1 | -1) {
     change(i, (g) => {
       const size = g.size + direction * stepOf(g)
-      const lo = g.kind === 'rainbow' ? 4 : 2
+      const lo = g.rainbow ? 4 : 2
       return { ...g, size: Math.min(maxOf(g), Math.max(lo, size)) }
     })
   }
@@ -161,7 +161,7 @@
               <button class="ghost" onclick={() => bump(i, 1)} aria-label="More cards">+</button>
             </div>
             <label class="nowild">
-              <input type="checkbox" checked={oneColorOf(g)} disabled={g.kind === 'rainbow' || g.kind === 'color'} onchange={() => toggleOneColor(i)} />
+              <input type="checkbox" checked={oneColorOf(g)} disabled={!!g.rainbow || g.kind === 'color'} onchange={() => toggleOneColor(i)} />
               <span>One color</span>
             </label>
             <label class="nowild">

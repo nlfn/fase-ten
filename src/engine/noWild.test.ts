@@ -15,7 +15,8 @@ import {
 import type { GroupSpec, PhaseSet } from './index'
 import { applyAction, createGame } from './game'
 import { createBot } from './bot'
-import { nums, num, wild } from './testUtils'
+import { group, nums, num, wild } from './testUtils'
+import type { GroupName } from './testUtils'
 
 const SET = 'single:s3-r4n' as PhaseSet // a set that takes Wilds, and a run that does not
 
@@ -25,7 +26,7 @@ describe('no Wilds on one group of a phase', () => {
     expect(buildGroup({ kind: 'run', size: 4, noWild: true }, [...nums(1, 2, 3), wild()])).toBeNull()
     expect(buildGroup({ kind: 'run', size: 4 }, [...nums(1, 2, 3), wild()])).not.toBeNull()
     expect(buildGroup({ kind: 'set', size: 3, noWild: true }, [num(5), num(5), wild()])).toBeNull()
-    expect(buildGroup({ kind: 'rainbow', size: 4, noWild: true }, [num(1, 'red'), num(2, 'blue'), num(3, 'green'), wild()])).toBeNull()
+    expect(buildGroup({ kind: 'run', size: 4, rainbow: true, noWild: true }, [num(1, 'red'), num(2, 'blue'), num(3, 'green'), wild()])).toBeNull()
   })
 
   it('lays down with a Wild in the set but never in the run', () => {
@@ -58,7 +59,7 @@ describe('no Wilds on one group of a phase', () => {
 })
 
 describe('phase codes with no Wilds', () => {
-  const g = (kind: GroupSpec['kind'], size: number, noWild = false): GroupSpec => (noWild ? { kind, size, noWild } : { kind, size })
+  const g = (kind: GroupName, size: number, noWild = false): GroupSpec => group(kind, size, noWild ? { noWild } : {})
 
   it('round trips, and the first single round codes still work', () => {
     const groups = [g('set', 3), g('run', 3, true), g('rainbow', 4, true)]

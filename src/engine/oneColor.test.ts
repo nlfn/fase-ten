@@ -16,9 +16,10 @@ import {
 import type { GroupSpec, PhaseSet } from './index'
 import { applyAction, createGame } from './game'
 import { createBot } from './bot'
-import { num, nums, wild } from './testUtils'
+import { group, num, nums, wild } from './testUtils'
+import type { GroupName } from './testUtils'
 
-const spec = (kind: GroupSpec['kind'], size: number, extra: Partial<GroupSpec> = {}): GroupSpec => ({ kind, size, ...extra })
+const spec = (kind: GroupName, size: number, extra: Partial<GroupSpec> = {}): GroupSpec => group(kind, size, extra)
 const setOf = (code: string) => `single:${code}` as PhaseSet
 
 describe('a set in one color', () => {
