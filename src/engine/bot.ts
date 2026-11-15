@@ -20,16 +20,21 @@
 // bot never discards a card the table can use when it has any other choice, and it aims Skips at
 // that player first.
 //
-// Memory is used when choosing a discard: a card an opponent has been picking up is kept back
-// when the choice is otherwise even, and a number an opponent has thrown away is safe to throw.
+// Memory is used when choosing a discard: a card an opponent wants is kept back when the choice is
+// otherwise even. What they want is read from the phase they are on (which everyone can see) and the
+// cards they picked up: the same number for a set, a neighbor for a run, the same color for a color
+// phase. A number an opponent has thrown away is safe to throw.
+//
+// It stays a tie-break on purpose. Letting it outrank getting rid of points was tried: rounds at a
+// table of four ran half as long again (73 actions against 49) and nobody won more often.
 
 import { cardPoints } from './cards'
-import type { Card } from './cards'
-import { allowsWilds, canHit, findPhaseLayout, phaseMissing, phaseSize } from './phases'
-import type { RunEnd } from './phases'
+import type { Card, NumberCard } from './cards'
+import { allowsWilds, canHit, findPhaseLayout, phaseMissing, phaseSize, phasesOf } from './phases'
+import type { GroupSpec, RunEnd } from './phases'
 import { createHitPlanner, lite, withHit } from './hitPlan'
 import { currentPlayer, hitTargets, topDiscard } from './game'
-import { doneCount, hasLaidDown, isSittingOut, openPhases, phaseCount } from './game'
+import { doneCount, hasLaidDown, isSittingOut, openPhases, phaseCount, targetPhase } from './game'
 import type { Action, GameState } from './game'
 
 export type BotLevel = 'easy' | 'medium' | 'expert'
@@ -95,24 +100,67 @@ export function recall(state: GameState, me: number, level: BotLevel): Map<numbe
   return memory
 }
 
+/** What a card scores when a pickup is strong evidence that an opponent wants it. */
+const STRONG_DANGER = 3
+
 /**
- * How much giving this card away could help someone who has not laid down yet. A number an
- * opponent picked up is wanted (same number for a set, a neighbor for a run); a number they threw
- * away is not.
+ * The groups an opponent could be collecting for, and whether that is known or a guess. Everyone can
+ * see the phase a player is on (the Phases chart shows it in every ordering), so a bot reads it the
+ * way a person does. In You Pick there is no single phase until the cards go down, so all the phases
+ * the player has not done yet are possible.
+ */
+function collecting(state: GameState, who: number): { groups: readonly GroupSpec[]; known: boolean } {
+  const defs = phasesOf(state.phaseSet)
+  const target = targetPhase(state, who)
+  if (target !== null) return { groups: defs[target]?.groups ?? [], known: true }
+  const open = openPhases(state, who)
+  return { groups: open.flatMap((i) => defs[i]?.groups ?? []), known: open.length === 1 }
+}
+
+/** How much a card would help a group, going by one card the opponent picked up. */
+function wantedBy(group: GroupSpec, picked: NumberCard, card: NumberCard, known: boolean): number {
+  const sameColor = picked.color === card.color
+  if (group.kind === 'color') {
+    // One pickup says a lot when the phase is known to need a color, and little when it is a guess.
+    return sameColor ? (known ? STRONG_DANGER : 1) : 0
+  }
+  if (group.kind === 'set') {
+    if (picked.value !== card.value) return 0
+    return !group.oneColor || sameColor ? STRONG_DANGER : 0
+  }
+  // A run never wants a second card of a number it has. It wants the numbers next to it.
+  const step = group.parity ? 2 : 1
+  const gap = Math.abs(picked.value - card.value)
+  if (gap === 0 || gap > 2 * step || gap % step !== 0) return 0
+  if (group.parity && (card.value % 2 === 0) !== (group.parity === 'even')) return 0
+  if (group.oneColor) return sameColor ? 2 : 0
+  return 1
+}
+
+/**
+ * How much giving this card away could help someone who has not laid down yet. It goes by the phase
+ * the opponent is on and what they picked up: the same number for a set, a neighbor for a run, the
+ * same color for a color phase. A number they threw away is not wanted, and neither is a color they
+ * threw away when they are after one color.
  */
 export function discardDanger(state: GameState, memory: Map<number, Recall>, card: Card): number {
   if (card.kind !== 'number') return 0
   let danger = 0
   for (const [index, entry] of memory) {
     if (hasLaidDown(state.players[index])) continue
+    const { groups, known } = collecting(state, index)
+    const wantsColor = groups.some((g) => g.kind === 'color')
     let mine = 0
     for (const w of entry.picked) {
       if (w.kind !== 'number') continue
-      if (w.value === card.value) mine += 3
-      else if (Math.abs(w.value - card.value) <= 2) mine += 1
+      let most = 0
+      for (const g of groups) most = Math.max(most, wantedBy(g, w, card, known))
+      mine += most
     }
     for (const d of entry.discarded) {
-      if (d.kind === 'number' && d.value === card.value) mine -= 2
+      if (d.kind !== 'number') continue
+      if (d.value === card.value) mine -= 2
+      else if (wantsColor && d.color === card.color) mine -= 2
     }
     danger += Math.max(0, mine)
   }

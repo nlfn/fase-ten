@@ -13,6 +13,12 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 27,
+    date: '2026-11-15',
+    title: 'Fixed: computer players fed you the color you were collecting',
+    body: 'This was a bug. The computer players ignored the phase you were on and only thought about numbers, never colors. So if you needed one color and picked up a red, they kept throwing reds to you. They now look at your phase, the same way you can see theirs, and hold on to a card you want when they have another just as good to throw. They also tell sets from runs now. In You Pick they have to guess until you lay down. Easy still remembers nothing.',
+  },
+  {
     id: 26,
     date: '2026-11-14',
     title: 'A rebuilt engine, and one game ended',

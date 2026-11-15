@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { DECK_SIZE, nextRandom } from './cards'
-import { MEMORY_PLAYS, createBot, recall } from './bot'
+import type { Card } from './cards'
+import type { PhaseSet } from './phases'
+import { MEMORY_PLAYS, createBot, discardDanger, recall } from './bot'
 import type { Bot, BotLevel } from './bot'
-import { MAX_EVENTS, applyAction, createGame, doneCount, nextRound } from './game'
+import { MAX_EVENTS, applyAction, createGame, doneCount, nextRound, targetPhase } from './game'
 import type { Action, GameMode, GameState, PlayEvent, PlayerSetup } from './game'
 import { THREE_PLAYERS, advance, craftedGame, ids, markLaid, num, nums, skip, wild } from './testUtils'
 
@@ -274,6 +276,7 @@ describe('memory', () => {
 
   it('treats a number an opponent threw away as safe to throw', () => {
     const s = craftedGame(hand())
+    advance(s, 1, 1) // the opponent is on Phase 2, which has a run in it
     // A 10 picked up makes a 12 slightly risky (a run could use it)...
     s.events = [pickup(10, 900)]
     const kept = discarded(createBot('expert').chooseAction(s), s)
@@ -527,3 +530,104 @@ describe('defense against an opponent who is nearly out', () => {
     expect([...picks].sort()).toEqual([0, 2])
   })
 })
+
+describe('reading what an opponent is collecting', () => {
+  const R = (id: number, value: number, color: 'red' | 'blue' | 'green' | 'yellow'): Card => ({ id, kind: 'number', color, value })
+  const took = (card: Card, player = 1): PlayEvent => ({ player, kind: 'pickup', card })
+  const threw = (card: Card, player = 1): PlayEvent => ({ player, kind: 'discard', card })
+  /** A two player game with the opponent (seat 1) on the given phase of the given list. */
+  function facing(phase: number, events: PlayEvent[], mode: GameMode = 'classic', set: PhaseSet = 'classic'): GameState {
+    const s = createGame([{ name: 'Me', isBot: true }, { name: 'Other', isBot: true }], 5, mode, set)
+    if (mode !== 'yousee') s.players[1].done = s.players[1].done.map((_, i) => s.players[1].route.indexOf(i) < s.players[1].route.indexOf(phase))
+    s.events = events
+    return s
+  }
+  const danger = (s: GameState, card: Card) => discardDanger(s, recall(s, 0, 'expert'), card)
+
+  it('7 of one color: after they pick up a red, red is risky and other colors are not', () => {
+    const s = facing(7, [took(R(900, 4, 'red'))])
+    expect(danger(s, R(1, 11, 'red'))).toBeGreaterThan(0)
+    expect(danger(s, R(2, 4, 'red'))).toBeGreaterThan(0)
+    expect(danger(s, R(3, 11, 'blue'))).toBe(0)
+    // The number does not matter to a color phase: a blue 4 is no more wanted than a blue 11.
+    expect(danger(s, R(4, 4, 'blue'))).toBe(0)
+  })
+
+  it('the bot before you keeps the red when it has an equal card to throw', () => {
+    // Two 11s that are equally useless to the bot's own phase (2 sets of 3). The opponent took a red.
+    const s = craftedGame([R(1, 11, 'red'), R(2, 11, 'blue'), ...nums(1, 1, 3, 3, 5, 5, 7, 7), R(3, 9, 'green')])
+    advance(s, 1, 7) // the opponent is on Phase 8, 7 cards of one color
+    s.events = [took(R(900, 4, 'red'))]
+    for (const level of ['medium', 'expert'] as const) {
+      const a = createBot(level, () => 0.99).chooseAction(s)
+      expect(a.type === 'discard' && a.cardId).toBe(2)
+    }
+    // An easy bot remembers nothing, and with nothing remembered the first of the two goes.
+    s.events = []
+    const plain = createBot('expert').chooseAction(s)
+    expect(plain.type === 'discard' && plain.cardId).toBe(1)
+  })
+
+  it('works the same in Random, where the phase a player is on is also on show', () => {
+    const s = facing(7, [took(R(900, 4, 'red'))], 'random')
+    expect(targetPhase(s, 1)).toBe(7)
+    expect(danger(s, R(1, 11, 'red'))).toBeGreaterThan(0)
+    expect(danger(s, R(3, 11, 'blue'))).toBe(0)
+  })
+
+  it('a color they threw away is safe again', () => {
+    const s = facing(7, [took(R(900, 4, 'red')), threw(R(901, 9, 'red'))])
+    expect(danger(s, R(1, 11, 'red'))).toBeLessThan(danger(facing(7, [took(R(900, 4, 'red'))]), R(1, 11, 'red')))
+  })
+
+  it('more pickups of a color make it riskier', () => {
+    const one = facing(7, [took(R(900, 4, 'red'))])
+    const two = facing(7, [took(R(900, 4, 'red')), took(R(901, 8, 'red'))])
+    expect(danger(two, R(1, 11, 'red'))).toBeGreaterThan(danger(one, R(1, 11, 'red')))
+  })
+
+  it('sets only: the same number is wanted, a neighbor is not', () => {
+    const s = facing(0, [took(R(900, 6, 'red'))]) // 2 sets of 3
+    expect(danger(s, R(1, 6, 'blue'))).toBeGreaterThan(0)
+    expect(danger(s, R(2, 7, 'blue'))).toBe(0)
+    expect(danger(s, R(3, 11, 'red'))).toBe(0)
+  })
+
+  it('runs only: a neighbor is wanted, a second card of the same number is not', () => {
+    const s = facing(3, [took(R(900, 6, 'red'))]) // 1 run of 7
+    expect(danger(s, R(1, 7, 'blue'))).toBeGreaterThan(0)
+    expect(danger(s, R(2, 4, 'green'))).toBeGreaterThan(0)
+    expect(danger(s, R(3, 6, 'blue'))).toBe(0)
+    expect(danger(s, R(4, 9, 'blue'))).toBe(0)
+  })
+
+  it('a run in one color only wants neighbors of that color', () => {
+    const s = facing(9, [took(R(900, 6, 'red'))], 'classic', 'alternate') // 1 color run of 6
+    expect(danger(s, R(1, 7, 'red'))).toBeGreaterThan(0)
+    expect(danger(s, R(2, 7, 'blue'))).toBe(0)
+  })
+
+  it('a run of evens wants the next even numbers, not the odd ones between', () => {
+    const s = facing(2, [took(R(900, 6, 'red'))], 'classic', 'alternate') // 1 run of 5 evens + 1 set of 3
+    expect(danger(s, R(1, 8, 'blue'))).toBeGreaterThan(0)
+    expect(danger(s, R(2, 7, 'blue'))).toBe(0)
+    expect(danger(s, R(3, 6, 'blue'))).toBeGreaterThan(0) // the set in the same phase wants another 6
+  })
+
+  it('You Pick: the phase is a guess, so a color counts for less than when it is known', () => {
+    const known = facing(7, [took(R(900, 4, 'red'))])
+    const guess = facing(7, [took(R(900, 4, 'red'))], 'yousee')
+    expect(danger(guess, R(1, 11, 'red'))).toBeGreaterThan(0)
+    expect(danger(guess, R(1, 11, 'red'))).toBeLessThan(danger(known, R(1, 11, 'red')))
+    // With 7 of one color already done, and no other color phase left, color stops counting.
+    guess.players[1].done[7] = true
+    expect(danger(guess, R(1, 11, 'red'))).toBe(0)
+  })
+
+  it('says nothing about a player who has laid down: the groups on the table speak for them', () => {
+    const s = facing(7, [took(R(900, 4, 'red'))])
+    s.players[1].laid = 7
+    expect(danger(s, R(1, 11, 'red'))).toBe(0)
+  })
+})
+
