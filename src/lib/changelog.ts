@@ -13,6 +13,12 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 27,
+    date: '2026-11-15',
+    title: 'Computer players notice what you are collecting',
+    body: 'The computer players now look at the phase you are on, the same way you can see theirs. If you need one color and pick up a red, they hold on to their reds when they have another card just as good to throw. They also tell sets from runs: a second 6 is only kept from you when your phase has a set in it. In You Pick they have to guess until you lay down. Easy still remembers nothing.',
+  },
+  {
     id: 26,
     date: '2026-11-14',
     title: 'A rebuilt engine, and one game ended',
