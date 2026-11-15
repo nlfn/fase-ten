@@ -13,7 +13,7 @@
 // Levels:
 //  - easy:   makes deliberate mistakes some of the time and remembers nothing about the others.
 //  - medium: makes more mistakes and hits greedily, and only remembers each opponent's last pickup and last two discards.
-//  - expert: plays cleanly and remembers every pickup and discard this round.
+//  - expert: plays cleanly and remembers every pickup and discard from the last 40 plays.
 //
 // Defense: once any opponent has laid down they can add cards to the groups on the table, so a
 // discard that fits a group is a gift. If a laid-down opponent is down to two cards or fewer, the
@@ -30,7 +30,7 @@ import type { RunEnd } from './phases'
 import { createHitPlanner, lite, withHit } from './hitPlan'
 import { currentPlayer, hitTargets, topDiscard } from './game'
 import { doneCount, hasLaidDown, isSittingOut, openPhases, phaseCount } from './game'
-import type { Action, GameState, Player } from './game'
+import type { Action, GameState } from './game'
 
 export type BotLevel = 'easy' | 'medium' | 'expert'
 
@@ -52,7 +52,18 @@ const RULES: Record<BotLevel, { mistakeRate: number; lookAhead: boolean; defense
   expert: { mistakeRate: 0, lookAhead: true, defense: true },
 }
 
-/** How much of each opponent's recent play a level can recall. */
+/**
+ * How far back the computer players remember, in plays (a draw, a pickup, a discard and a hit are one
+ * play each). With four players 40 plays is about the last five times round the table.
+ *
+ * Memory fades on purpose. A bot holds back a card it has seen an opponent collect, and with a perfect
+ * memory two bots can hold back each other's cards for as long as they remember, so a round on a hard
+ * phase never ends. In testing a round with a longer memory lasted about as long as the memory did,
+ * and with no limit one never finished, while the gain in games won was within chance.
+ */
+export const MEMORY_PLAYS = 40
+
+/** How much of each opponent's play, within the last MEMORY_PLAYS, a level can recall. */
 const MEMORY: Record<BotLevel, { pickups: number; discards: number }> = {
   easy: { pickups: 0, discards: 0 },
   medium: { pickups: 1, discards: 2 },
@@ -64,14 +75,14 @@ export interface Recall {
   discarded: Card[] // cards the opponent threw away, oldest first
 }
 
-/** What a bot of this level remembers about each other player, from this round's plays. */
+/** What a bot of this level remembers about each other player, from the last MEMORY_PLAYS plays of this round. */
 export function recall(state: GameState, me: number, level: BotLevel): Map<number, Recall> {
   const limit = MEMORY[level]
   const memory = new Map<number, Recall>()
   state.players.forEach((_, i) => {
     if (i !== me) memory.set(i, { picked: [], discarded: [] })
   })
-  for (const e of state.events) {
+  for (const e of state.events.slice(-MEMORY_PLAYS)) {
     const entry = memory.get(e.player)
     if (!entry) continue
     if (e.kind === 'pickup') entry.picked.push(e.card)

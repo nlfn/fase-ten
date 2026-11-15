@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { DECK_SIZE, nextRandom } from './cards'
-import { createBot, recall } from './bot'
+import { MEMORY_PLAYS, createBot, recall } from './bot'
 import type { Bot, BotLevel } from './bot'
-import { applyAction, createGame, doneCount, nextRound } from './game'
-import type { GameMode, GameState, PlayEvent, PlayerSetup } from './game'
+import { MAX_EVENTS, applyAction, createGame, doneCount, nextRound } from './game'
+import type { Action, GameMode, GameState, PlayEvent, PlayerSetup } from './game'
 import { THREE_PLAYERS, advance, craftedGame, ids, markLaid, num, nums, skip, wild } from './testUtils'
 
 function seededRandom(seed: number): () => number {
@@ -282,6 +282,59 @@ describe('memory', () => {
     s.events.push({ player: 1, kind: 'discard', card: { id: 901, kind: 'number', color: 'blue', value: 12 } })
     const card = discarded(createBot('expert').chooseAction(s), s)
     expect(card).toMatchObject({ kind: 'number', value: 12 })
+  })
+
+  it('the history keeps the round, and memory covers the last 40 plays of it', () => {
+    // Turn by turn through the real engine: the opponent takes the first discard, then both players
+    // draw and throw until that pickup is exactly 40 plays old, and then one play more.
+    let s = createGame([{ name: 'Me', isBot: true }, { name: 'Other', isBot: true }], 12)
+    const act = (a: Action) => {
+      const r = applyAction(s, a)
+      if (!r.ok) throw new Error(r.error)
+      s = r.state
+    }
+    const throwOne = () => {
+      const card = s.players[s.current].hand.find((c) => c.kind !== 'skip')!
+      act({ type: 'discard', cardId: card.id })
+    }
+    if (s.current !== 0) throw new Error('expected seat 0 to start')
+    act({ type: 'drawDeck' })
+    throwOne()
+    const taken = s.discardPile[s.discardPile.length - 1]
+    act({ type: 'drawDiscard' }) // the opponent picks it up: play number 3
+    const pickedIds = (level: BotLevel) => recall(s, 0, level).get(1)!.picked.map((c) => c.id)
+    throwOne()
+    while (s.events.length < 3 + MEMORY_PLAYS - 1) {
+      act({ type: 'drawDeck' })
+      if (s.events.length < 3 + MEMORY_PLAYS - 1) throwOne()
+    }
+    // The pickup is now the oldest play still inside the memory.
+    expect(s.events.at(-MEMORY_PLAYS)).toMatchObject({ kind: 'pickup', player: 1 })
+    expect(pickedIds('expert')).toEqual([taken.id])
+    expect(pickedIds('medium')).toEqual([taken.id])
+    expect(pickedIds('easy')).toEqual([])
+    // One more play and it has faded for every level, though the history still shows it.
+    if (s.stage === 'play') throwOne()
+    else act({ type: 'drawDeck' })
+    expect(pickedIds('expert')).toEqual([])
+    expect(pickedIds('medium')).toEqual([])
+    expect(s.events[2]).toMatchObject({ kind: 'pickup', player: 1, card: { id: taken.id } })
+    expect(s.events.length).toBeGreaterThan(MEMORY_PLAYS)
+  })
+
+  it('the history is cut off at MAX_EVENTS plays, newest kept', () => {
+    let s = createGame([{ name: 'Me', isBot: true }, { name: 'Other', isBot: true }], 12)
+    for (let turn = 0; turn < 200; turn++) {
+      for (const a of [{ type: 'drawDeck' } as Action, null]) {
+        const action: Action = a ?? { type: 'discard', cardId: s.players[s.current].hand.find((c) => c.kind !== 'skip')!.id }
+        const r = applyAction(s, action)
+        if (!r.ok) throw new Error(r.error)
+        s = r.state
+      }
+    }
+    expect(s.status).toBe('playing')
+    expect(s.events).toHaveLength(MAX_EVENTS)
+    expect(s.events.at(-1)).toMatchObject({ kind: 'discard' })
   })
 
   it('recall keeps one pickup and two discards per opponent for medium, everything for expert', () => {

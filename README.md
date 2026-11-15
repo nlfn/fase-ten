@@ -126,8 +126,12 @@ All levels follow the same plan: take a discard only if it brings the hand close
 The levels differ in mistakes and memory:
 
 - **Easy** makes deliberate mistakes about a third of the time and remembers nothing about the other players.
-- **Medium** makes a mistake about one move in five (20% of the time), adds cards to the table one at a time without planning ahead, and only remembers each opponent's last pickup and last two discards.
-- **Expert** plays cleanly and remembers every pickup and discard this round.
+- **Medium** makes a mistake about one move in five (20% of the time), adds cards to the table one at a time without planning ahead, and only remembers each opponent's last pickup and last two discards (within the last 40 plays).
+- **Expert** plays cleanly and remembers every pickup and discard from the last 40 plays.
+
+Memory comes from `events` on the game state, the list of plays in the current round (the last 300, which is a whole round in practice; it starts again when the next round is dealt). The game screen's history is drawn from the same list. All levels only look at the last 40 plays of it (`MEMORY_PLAYS` in `bot.ts`), about five times round a table of four.
+
+Memory fades on purpose. A bot holds back a card it has seen an opponent collect, and with a perfect memory two bots can hold back each other's cards for as long as they remember. Tested on hard single rounds, the longest round lasted about as long as the memory did (167 actions at 40 plays, 369 at 300, 671 at 600), and with no limit one round never ended. Over 1,200 games per table, an Expert with no limit won 50.8% against an Expert with 40 plays at a table of two and 52.6% at a table of four, which is within chance (about 1.4 points either way).
 
 Hitting looks ahead (`hitPlan.ts`, Easy and Expert; Medium hits greedily): after laying down, a bot searches the order in which it can add its cards to the table and plays the card that leaves the least behind. This matters most for Wilds, which have to bridge a gap on a run (a Wild as the 5 and another as the 4 so a 3 and a 2 can follow) instead of going on someone else's set. The "auto lay down" button uses the same logic, so it plays out your whole hand the best way it can find.
 

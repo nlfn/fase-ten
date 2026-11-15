@@ -735,7 +735,7 @@ describe('YouSee mode', () => {
     const laid = run(s, { type: 'layDown', groups: [ids(hand.slice(0, 5)), ids(hand.slice(5, 7))], phase: 8 })
     expect(laid.players[0].laid).toBe(8)
     expect(laid.melds).toHaveLength(2)
-    expect(laid.log.at(-1)).toMatch(/Phase 9/)
+    expect(laid.events.at(-1)).toMatchObject({ kind: 'laydown', player: 0, phase: 8 })
   })
 
   it('needs you to say which phase', () => {

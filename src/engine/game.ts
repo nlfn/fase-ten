@@ -5,7 +5,6 @@
 import {
   HAND_SIZE,
   buildDeck,
-  cardLabel,
   handPoints,
   randomSeed,
   shuffleWithSeed,
@@ -97,10 +96,9 @@ export interface GameState {
   rngSeed: number
   roundResult: RoundResult | null
   winners: number[] // set when status is gameOver
-  log: string[]
   turnCount: number // counts every seat the turn passes to, including skipped seats
   hits: HitMark[] // recent additions to groups, used to highlight them
-  events: PlayEvent[] // recent plays this round, oldest first
+  events: PlayEvent[] // the plays of this round, oldest first (the last MAX_EVENTS of them)
   scoreHistory: RoundRecord[] // one entry per finished round, oldest first
   drew: boolean[] // who has taken a draw so far this round
   tiebreak: TieEntry[] | null // while a tiebreaker round is being played: the tied players and their phases. Everyone else sits out
@@ -121,17 +119,17 @@ export interface PlayerSetup {
   isBot: boolean
 }
 
-const MAX_LOG = 80
-const MAX_EVENTS = 40
+/**
+ * How many plays of the round are kept. An ordinary round is 40 to 50 plays and the longest seen in
+ * testing was about 150, so this holds a whole round in practice, while a round that drags on for
+ * hundreds of turns cannot make the saved game grow without end.
+ */
+export const MAX_EVENTS = 300
 
+/** Records a play. The list starts again when the next round is dealt. */
 function addEvent(state: GameState, event: PlayEvent): void {
   state.events.push(event)
   if (state.events.length > MAX_EVENTS) state.events.splice(0, state.events.length - MAX_EVENTS)
-}
-
-function addLog(state: GameState, message: string): void {
-  state.log.push(message)
-  if (state.log.length > MAX_LOG) state.log.splice(0, state.log.length - MAX_LOG)
 }
 
 const fail = (error: string): ActionResult => ({ ok: false, error })
@@ -175,7 +173,6 @@ export function createGame(
     rngSeed: seed >>> 0,
     roundResult: null,
     winners: [],
-    log: [],
     turnCount: 0,
     hits: [],
     events: [],
@@ -305,13 +302,11 @@ function dealRound(state: GameState, tiebreak: TieEntry[] | null = null): void {
   const n = state.players.length
   let first: number
   if (participants) {
-    addLog(state, 'The tiebreaker begins')
     // Start from where the next round would have started, with the first tied player at or after that seat.
     const from = state.round % n
     first = participants.map((i) => (i - from + n) % n).reduce((a, b) => Math.min(a, b))
     first = (first + from) % n
   } else {
-    addLog(state, `Round ${state.round} begins`)
     first = (state.round - 1) % n
   }
   if (starter.kind === 'skip') state.players[first].skipsPending = 1
@@ -331,7 +326,6 @@ function beginTurn(state: GameState, index: number): void {
     }
     if (state.players[i].skipsPending <= 0) break
     state.players[i].skipsPending -= 1
-    addLog(state, `${state.players[i].name} is skipped`)
     addEvent(state, { player: i, kind: 'skipped' })
     i = (i + 1) % n
     state.turnCount += 1 // a skipped seat still counts, so one lap is always one full round
@@ -348,7 +342,6 @@ function ensureDrawPile(state: GameState): boolean {
   state.rngSeed = shuffled.seed
   state.drawPile = shuffled.items
   state.discardPile = [top]
-  addLog(state, 'The discard pile was shuffled to make a new draw pile')
   return true
 }
 
@@ -360,7 +353,6 @@ function endTiebreak(state: GameState, winner: number | null): void {
   state.roundResult = { winner, points, completed, tie: { players: tied, how: 'round' } }
   state.winners = [first]
   state.status = 'gameOver'
-  addLog(state, `${state.players[first].name} won the tiebreaker`)
 }
 
 function endRound(state: GameState, winner: number | null): void {
@@ -385,7 +377,6 @@ function endRound(state: GameState, winner: number | null): void {
     shutOut: state.players.map((p, i) => i !== winner && !hasLaidDown(p) && !state.drew[i]),
   })
 
-  if (winner !== null) addLog(state, `${state.players[winner].name} went out`)
 
   const finishers = state.players
     .map((p, i) => ({ p, i }))
@@ -404,7 +395,6 @@ function endRound(state: GameState, winner: number | null): void {
       state.winners = []
       state.status = 'roundOver'
       state.roundResult.tie = { players: tied, how: 'round' }
-      addLog(state, `${tied.map((i) => state.players[i].name).join(' and ')} are tied`)
     } else if (tied.length > 1) {
       // Only computer players are tied, and nobody wants to watch that. Draw the winner at random.
       const shuffled = shuffleWithSeed(tied, state.rngSeed)
@@ -412,7 +402,6 @@ function endRound(state: GameState, winner: number | null): void {
       state.winners = [shuffled.items[0]]
       state.roundResult.tie = { players: tied, how: 'coin' }
       state.status = 'gameOver'
-      addLog(state, `${state.players[state.winners[0]].name} won the tie on a coin toss`)
     } else {
       state.winners = tied
       state.status = 'gameOver'
@@ -439,7 +428,6 @@ export function applyAction(state: GameState, action: Action): ActionResult {
       player.hand.push(s.drawPile.pop() as Card)
       s.drew[s.current] = true
       s.stage = 'play'
-      addLog(s, `${player.name} drew from the deck`)
       addEvent(s, { player: s.current, kind: 'draw' })
       return succeed(s)
     }
@@ -453,7 +441,6 @@ export function applyAction(state: GameState, action: Action): ActionResult {
       player.hand.push(top)
       s.drew[s.current] = true
       s.stage = 'play'
-      addLog(s, `${player.name} picked up ${cardLabel(top)}`)
       addEvent(s, { player: s.current, kind: 'pickup', card: top })
       return succeed(s)
     }
@@ -497,7 +484,6 @@ export function applyAction(state: GameState, action: Action): ActionResult {
         s.melds.push({ ...body, id: s.nextMeldId++, owner: s.current } as Meld)
       }
       player.laid = phaseIdx
-      addLog(s, `${player.name} laid down Phase ${phaseIdx + 1}`)
       addEvent(s, { player: s.current, kind: 'laydown', phase: phaseIdx })
       if (player.hand.length === 0) endRound(s, s.current)
       return succeed(s)
@@ -514,8 +500,6 @@ export function applyAction(state: GameState, action: Action): ActionResult {
       player.hand = player.hand.filter((c) => c.id !== card.id)
       s.hits.push({ cardId: card.id, turn: s.turnCount })
       s.hits = s.hits.filter((h) => s.turnCount - h.turn < n)
-      const whose = meld.owner === s.current ? 'their own group' : `${s.players[meld.owner].name}'s group`
-      addLog(s, `${player.name} hit ${whose} with ${cardLabel(card)}`)
       addEvent(s, { player: s.current, kind: 'hit', card, owner: meld.owner })
       if (player.hand.length === 0) endRound(s, s.current)
       return succeed(s)
@@ -551,10 +535,8 @@ export function applyAction(state: GameState, action: Action): ActionResult {
       s.discardPile.push(card)
       if (target !== null) {
         s.players[target].skipsPending += 1
-        addLog(s, `${player.name} played Skip on ${s.players[target].name}`)
         addEvent(s, { player: s.current, kind: 'skip', card, target })
       } else {
-        addLog(s, `${player.name} discarded ${cardLabel(card)}`)
         addEvent(s, { player: s.current, kind: 'discard', card })
       }
 
