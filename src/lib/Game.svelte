@@ -1,4 +1,6 @@
 <script lang="ts">
+  // The game screen. This file holds the turn: the game state, what is selected, what the player may
+  // do, and what each button does. The parts of the screen are in ./game/, and the words in gameText.ts.
   import {
     targetPhase,
     doneCount,
@@ -7,25 +9,28 @@
     applyAction,
     arrangeSelection,
     canPickUpDiscard,
-    cardPoints,
     createBot,
     currentPlayer,
     discardLastCard,
     findPhaseLayout,
     hitTargets,
     isSittingOut,
-    meldsOf,
     nextRound,
     phaseDescription,
     phasesOf,
-    recentHitIds,
     topDiscard,
   } from '../engine'
-  import type { Action, Card, GameState, HitTarget, Meld, RunEnd } from '../engine'
-  import CardView from './CardView.svelte'
+  import type { Action, Card, GameState, HitTarget, RunEnd } from '../engine'
   import Sheet from './Sheet.svelte'
   import type { SheetTab } from './Sheet.svelte'
-  import { groupTurns } from './turns'
+  import { HUMAN } from './gameText'
+  import HandArea from './game/HandArea.svelte'
+  import History from './game/History.svelte'
+  import Piles from './game/Piles.svelte'
+  import PlayerPanels from './game/PlayerPanels.svelte'
+  import QuitDialog from './game/QuitDialog.svelte'
+  import RoundResult from './game/RoundResult.svelte'
+  import TableGroups from './game/TableGroups.svelte'
   import PhasePicker from './PhasePicker.svelte'
   import type { PhaseOption } from './PhasePicker.svelte'
   import { clearSession, saveSession } from './storage'
@@ -46,12 +51,10 @@
   const bot = createBot(session.level)
 
   let selectedIds = $state<number[]>([])
-  let sortMode = $state<'number' | 'color'>('number')
   let notice = $state('')
   // True while the only selection is the card that was selected automatically after a draw.
   // The first tap on a card then starts a fresh selection instead of adding to it.
   let autoSelected = $state(false)
-  let continueButton = $state<HTMLButtonElement>()
   // States from before each lay down or hit this turn, so those moves can be taken back.
   // Drawing and discarding clear it: they cannot be undone.
   let undoStack = $state.raw<GameState[]>([])
@@ -59,14 +62,9 @@
   let sheet = $state<SheetTab | null>(null)
   let showPicker = $state(false)
   let confirmQuit = $state(false)
-  let keepPlaying = $state<HTMLButtonElement>()
-  $effect(() => {
-    if (confirmQuit) keepPlaying?.focus()
-  })
   // Lets the player tuck the round summary away to look over the finished table.
   let resultHidden = $state(false)
 
-  const HUMAN = 0
   const yousee = $derived(game.mode === 'yousee')
   const single = $derived(isSingleRound(game))
   const me = $derived(game.players[HUMAN])
@@ -92,10 +90,6 @@
     if (!myTurn || game.stage !== 'play' || me.laid !== null) return false
     return myOpen.some((i) => layoutFor(i) !== null)
   })
-  const sortedHand = $derived(sortHand(me.hand, sortMode))
-  // Cards added to a group during the last full lap of the table, shown with an outline.
-  const markedIds = $derived(recentHitIds(game))
-  const anyMarked = $derived(game.melds.some((m) => m.cards.some((c) => markedIds.has(c.id))))
   const selectedCards = $derived(me.hand.filter((c) => selectedIds.includes(c.id)))
   const skipSelected = $derived(selectedCards.length === 1 && selectedCards[0].kind === 'skip')
   // A Skip has to be played on someone, like adding to a group, and a player who is already losing a
@@ -131,48 +125,6 @@
     return 'Pick a card to add to a group on the table, or discard one card to end your turn.'
   })
 
-  const resultTitle = $derived.by(() => {
-    if (game.status === 'gameOver') {
-      const names = game.winners.map((i) => game.players[i].name)
-      if (game.winners.length === 1) {
-        const how = game.roundResult?.tie?.how
-        const you = game.winners[0] === HUMAN
-        if (how === 'round') return you ? 'You win the tiebreaker' : `${names[0]} wins the tiebreaker`
-        if (how === 'coin') return you ? 'You win the coin toss' : `${names[0]} wins the coin toss`
-        return you ? 'You win the game' : `${names[0]} wins the game`
-      }
-      return `${names.join(' and ')} tie for the win`
-    }
-    if (game.tieNext) return `${tiedNames} are tied`
-    const winner = game.roundResult?.winner
-    if (winner === null || winner === undefined) return 'Round over'
-    return winner === HUMAN ? 'You went out' : `${game.players[winner].name} went out`
-  })
-
-  const tiedNames = $derived(
-    (game.roundResult?.tie?.players ?? [])
-      .map((i) => (i === HUMAN ? 'You' : game.players[i].name))
-      .join(' and '),
-  )
-  const tieScore = $derived(game.players[game.roundResult?.tie?.players[0] ?? 0].score)
-  /** Explains a tie at the end of a round, if there was one. */
-  const tieNote = $derived.by(() => {
-    const tie = game.roundResult?.tie
-    if (!tie) return ''
-    const sitting = game.players.length > tie.players.length
-    if (game.tieNext) {
-      return (
-        `${tiedNames} tied on ${tieScore} points. Each of them repeats their final phase, and the first to go out wins.` +
-        (sitting ? ' Everyone else sits this one out.' : '')
-      )
-    }
-    if (tie.how === 'coin') {
-      return `${tiedNames} tied on ${tieScore} points. Only computer players were tied, so the winner was drawn at random.`
-    }
-    return ''
-  })
-  const nextLabel = $derived(game.tieNext ? 'Play tiebreaker' : 'Next round')
-
   // Computer players take their turns one action at a time so you can follow along.
   $effect(() => {
     if (game.status !== 'playing' || !game.players[game.current].isBot) return
@@ -191,20 +143,6 @@
     if (game.status === 'gameOver') clearSession()
     else saveSession({ state: game, level: session.level })
   })
-
-  $effect(() => {
-    if (game.status !== 'playing') continueButton?.focus()
-  })
-
-  function sortHand(hand: Card[], mode: 'number' | 'color'): Card[] {
-    const colorRank = { red: 0, blue: 1, green: 2, yellow: 3 }
-    const key = (c: Card): number => {
-      if (c.kind === 'wild') return 10_000
-      if (c.kind === 'skip') return 10_001
-      return mode === 'number' ? c.value * 10 + colorRank[c.color] : colorRank[c.color] * 100 + c.value
-    }
-    return hand.slice().sort((a, b) => key(a) - key(b) || a.id - b.id)
-  }
 
   function dispatch(action: Action): boolean {
     const first = applyAction(game, action)
@@ -384,83 +322,7 @@
     autoSelected = false
     notice = ''
   }
-
-  function meldTitle(m: Meld): string {
-    switch (m.kind) {
-      case 'set':
-        return m.color ? `${m.color[0].toUpperCase()}${m.color.slice(1)} set of ${m.value}s` : `Set of ${m.value}s`
-      case 'run': {
-        const tint = m.color ? `${m.color[0].toUpperCase()}${m.color.slice(1)} ` : ''
-        if (m.step) return `${tint}${m.start % 2 === 0 ? (tint ? 'even' : 'Even') : tint ? 'odd' : 'Odd'} run ${m.start} to ${m.end}`
-        if (m.color) return `${tint}run ${m.start} to ${m.end}`
-        return `Run ${m.start} to ${m.end}`
-      }
-      case 'color':
-        return `${m.color[0].toUpperCase()}${m.color.slice(1)} cards`
-    }
-  }
-
-  // One row per turn, newest first. Older turns scroll.
-  const allTurns = $derived(groupTurns(game.events).reverse())
-  // Show only one player's turns when a name chip is picked (null means everyone).
-  let historyFilter = $state<number | null>(null)
-  const history = $derived(
-    historyFilter === null ? allTurns.slice(0, 14) : allTurns.filter((t) => t.player === historyFilter).slice(0, 12),
-  )
-
-  const ownerLabel = (owner: number, player: number): string =>
-    owner === player ? 'their own group' : `${game.players[owner].name}'s group`
-
-  function phaseLabel(phase: number): string {
-    return phase >= phases.length ? 'All phases done' : `Phase ${phase + 1}`
-  }
-
-  /** The short progress line shown in a player's panel. */
-  function progress(who: number): string {
-    if (single) return 'Single round'
-    if (yousee) return `${doneCount(game.players[who])} of ${phases.length} done`
-    const label = phaseLabel(targetPhase(game, who) ?? phases.length)
-    // Once a round is over, a player who finished their phase has already moved on to the next one.
-    return game.status === 'roundOver' ? `Next: ${label}` : label
-  }
-
-  /** What a player is after right now, shown under their stats. */
-  function goalLine(who: number): string {
-    const p = game.players[who]
-    if (p.laid !== null) {
-      if (single) return `Laid down: ${phaseDescription(p.laid, game.phaseSet)}`
-      return `Laid down Phase ${p.laid + 1}: ${phaseDescription(p.laid, game.phaseSet)}`
-    }
-    if (yousee) return ''
-    const target = targetPhase(game, who)
-    return target === null ? '' : phaseDescription(target, game.phaseSet)
-  }
 </script>
-
-{#snippet meldView(m: Meld)}
-  {@const target = hitMap.get(m.id)}
-  <div class="meld" class:target={target !== undefined}>
-    <div class="meld-title">{meldTitle(m)}</div>
-    <div class="meld-cards">
-      {#each m.cards as c (c.id)}
-        <CardView card={c} size="xs" marked={markedIds.has(c.id)} />
-      {/each}
-    </div>
-    {#if target}
-      <div class="hit-row">
-        {#if m.kind === 'run'}
-          {#each target.ends as end (end)}
-            <button type="button" class="chip" onclick={() => hit(m.id, end)}>
-              Add as {end === 'low' ? m.start - (m.step ?? 1) : m.end + (m.step ?? 1)}
-            </button>
-          {/each}
-        {:else}
-          <button type="button" class="chip" onclick={() => hit(m.id)}>Add here</button>
-        {/if}
-      </div>
-    {/if}
-  </div>
-{/snippet}
 
 <div class="table" class:has-bar={resultHidden && game.status !== 'playing'}>
   <header class="bar">
@@ -480,170 +342,39 @@
     <button type="button" class="ghost" onclick={() => (confirmQuit = true)}>Quit</button>
   </header>
 
-  <section class="players" aria-label="Players">
-    {#each game.players as p, i (i)}
-      <div
-        class="player"
-        class:turn={game.status === 'playing' && game.current === i}
-        class:target={canPlaySkip && skipTargets[i]}
-      >
-        <div class="phead">
-          <span class="pname">{p.name}</span>
-          {#if isSittingOut(game, i)}<span class="badge">Sitting out</span>{/if}
-          {#if p.laid !== null}<span class="badge ok">Laid down</span>{/if}
-          {#if p.skipsPending > 0}
-            <span class="badge warn">Loses a turn</span>
-          {/if}
-        </div>
-        <div class="pstats">
-          <span>{progress(i)}</span>
-          <span>{p.hand.length} cards</span>
-          <span>{p.score} points</span>
-        </div>
-        {#if goalLine(i) && !isSittingOut(game, i)}
-          <p class="pgoal">{goalLine(i)}</p>
-        {/if}
-        {#if canPlaySkip && skipTargets[i]}
-          <button type="button" class="chip" onclick={() => playSkipOn(i)}>Play on {p.name}</button>
-        {/if}
-      </div>
-    {/each}
-  </section>
+  <PlayerPanels {game} {canPlaySkip} {skipTargets} onSkip={playSkipOn} />
 
-  <section class="melds" aria-label="Groups on the table">
-    {#if game.melds.length === 0}
-      <p class="empty">Groups appear here once someone lays down a phase.</p>
-    {:else}
-      {#each game.players as p, i (i)}
-        {@const owned = meldsOf(game, i)}
-        {#if owned.length > 0}
-          <div class="owner">
-            <h2>{i === HUMAN ? 'Your groups' : `${p.name}'s groups`}</h2>
-            <div class="owner-melds">
-              {#each owned as m (m.id)}
-                {@render meldView(m)}
-              {/each}
-            </div>
-          </div>
-        {/if}
-      {/each}
-      {#if anyMarked}
-        <p class="legend"><span class="swatch" aria-hidden="true"></span>Outlined cards were added recently.</p>
-      {/if}
-    {/if}
-  </section>
+  <TableGroups {game} {hitMap} onHit={hit} />
 
   <section class="center" aria-label="Draw and discard piles">
-    <div class="piles">
-      <div class="pile-wrap">
-        <button
-          type="button"
-          class="deck"
-          disabled={!canDrawDeck}
-          onclick={() => dispatch({ type: 'drawDeck' })}
-          aria-label="Draw from the deck, {game.drawPile.length} cards left"
-        >
-          <span class="count">{game.drawPile.length}</span>
-        </button>
-        <span class="pile-label">Deck</span>
-      </div>
-      <div class="pile-wrap">
-        {#if top}
-          <CardView
-            card={top}
-            glow={canTakeDiscard}
-            onclick={canTakeDiscard ? () => dispatch({ type: 'drawDiscard' }) : undefined}
-          />
-        {:else}
-          <div class="slot">Empty</div>
-        {/if}
-        <span class="pile-label">Discard</span>
-      </div>
-    </div>
+    <Piles
+      drawCount={game.drawPile.length}
+      {top}
+      {canDrawDeck}
+      {canTakeDiscard}
+      onDrawDeck={() => dispatch({ type: 'drawDeck' })}
+      onTakeDiscard={() => dispatch({ type: 'drawDiscard' })}
+    />
     <div class="talk" aria-live="polite">
       <p class="status">{status}</p>
       {#if notice}<p class="notice" role="alert">{notice}</p>{/if}
     </div>
-    {#if allTurns.length > 0}
-      <details class="history" open>
-        <summary>Recent plays</summary>
-        <div class="filters" role="group" aria-label="Show plays by">
-          <button type="button" class="fchip" aria-pressed={historyFilter === null} onclick={() => (historyFilter = null)}>
-            All
-          </button>
-          {#each game.players as p, i (i)}
-            <button
-              type="button"
-              class="fchip p{i % 4}"
-              aria-pressed={historyFilter === i}
-              onclick={() => (historyFilter = historyFilter === i ? null : i)}
-            >
-              {p.name}
-            </button>
-          {/each}
-        </div>
-        {#if history.length === 0}
-          <p class="none">{game.players[historyFilter ?? 0].name} has not played yet this round.</p>
-        {/if}
-        <ol>
-          {#each history as t, i (i)}
-            {@const name = game.players[t.player].name}
-            {#if t.skipped}
-              <li class="p{t.player % 4} lost">
-                <span class="who">{name}</span>
-                <span class="step">lost a turn to a Skip</span>
-              </li>
-            {:else}
-              <li class="p{t.player % 4}">
-                <span class="who">{name}</span>
-                {#each t.steps as step}
-                  <span class="step">
-                    {#if step.kind === 'draw'}
-                      drew
-                    {:else if step.kind === 'pickup'}
-                      took <CardView card={step.card} size="chip" />
-                    {:else if step.kind === 'laydown'}
-                      laid down Phase {step.phase + 1}
-                    {:else if step.kind === 'hit'}
-                      added
-                      {#each step.cards as c (c.id)}<CardView card={c} size="chip" />{/each}
-                      to {ownerLabel(step.owner, t.player)}
-                    {:else if step.kind === 'discard'}
-                      discarded <CardView card={step.card} size="chip" />
-                    {:else}
-                      played Skip on {game.players[step.target].name} <CardView card={step.card} size="chip" />
-                    {/if}
-                  </span>
-                {/each}
-              </li>
-            {/if}
-          {/each}
-        </ol>
-      </details>
-    {/if}
+    <History {game} />
   </section>
 
-  <section class="hand-area" aria-label="Your hand">
-    <div class="actions">
-      {#if me.laid === null}
-        <button type="button" class="primary" disabled={!canLay} onclick={layDown}>
-          {selectedCards.length > 1 ? 'Lay down selected' : yousee ? 'Lay down a phase' : 'Lay down phase'}
-        </button>
-      {/if}
-      <button type="button" disabled={!canDiscard} onclick={discardSelected}>Discard</button>
-      {#if myTurn && undoStack.length > 0}
-        <button type="button" onclick={undo}>Undo last move</button>
-      {/if}
-      <button type="button" class="ghost" onclick={() => (sortMode = sortMode === 'number' ? 'color' : 'number')}>
-        Sort by {sortMode === 'number' ? 'color' : 'number'}
-      </button>
-    </div>
-    <div class="hand">
-      {#each sortedHand as c (c.id)}
-        <CardView card={c} selected={selectedIds.includes(c.id)} onclick={() => toggle(c.id)} />
-      {/each}
-    </div>
-  </section>
+  <HandArea
+    hand={me.hand}
+    {selectedIds}
+    laidDown={me.laid !== null}
+    {yousee}
+    {canLay}
+    {canDiscard}
+    canUndo={myTurn && undoStack.length > 0}
+    onLayDown={layDown}
+    onDiscard={discardSelected}
+    onUndo={undo}
+    onToggle={toggle}
+  />
 
   {#if showPicker && myTurn}
     <PhasePicker
@@ -655,114 +386,15 @@
   {/if}
 
   {#if confirmQuit}
-    <div class="modal-backdrop" role="presentation" onclick={(e) => e.target === e.currentTarget && (confirmQuit = false)}>
-      <div
-        class="modal"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="quit-title"
-        aria-describedby="quit-text"
-        tabindex="-1"
-        onkeydown={(e) => e.key === 'Escape' && (confirmQuit = false)}
-      >
-        <h2 id="quit-title">Quit this game?</h2>
-        <p id="quit-text">
-          This will abandon the current game. Your scores and progress will be lost and you will not be able to
-          continue it. To pause instead, use Menu.
-        </p>
-        <div class="quit-actions">
-          <button type="button" class="primary" bind:this={keepPlaying} onclick={() => (confirmQuit = false)}>
-            Keep playing
-          </button>
-          <button type="button" class="danger" onclick={onQuit}>Abandon game</button>
-        </div>
-      </div>
-    </div>
+    <QuitDialog onCancel={() => (confirmQuit = false)} {onQuit} />
   {/if}
 
   {#if sheet}
     <Sheet {game} start={sheet} onClose={() => (sheet = null)} />
   {/if}
 
-  {#if game.status !== 'playing' && resultHidden}
-    <div class="result-bar" role="status">
-      <strong>{resultTitle}</strong>
-      <button type="button" class="ghost" onclick={() => (resultHidden = false)}>Show results</button>
-      {#if game.status === 'gameOver'}
-        <button type="button" class="primary" onclick={onExit}>New game</button>
-      {:else}
-        <button type="button" class="primary" onclick={startNextRound}>{nextLabel}</button>
-      {/if}
-    </div>
-  {:else if game.status !== 'playing'}
-    <div class="overlay">
-      <div class="panel" role="dialog" aria-modal="true" aria-labelledby="result-title">
-        <h2 id="result-title">{resultTitle}</h2>
-        {#if tieNote}<p class="tie-note">{tieNote}</p>{/if}
-        <table>
-          <thead>
-            <tr><th scope="col">Player</th><th scope="col">This round</th><th scope="col">Total</th><th scope="col">Next</th></tr>
-          </thead>
-          <tbody>
-            {#each game.players as p, i (i)}
-              <tr>
-                <th scope="row">{p.name}</th>
-                <td>{game.roundResult?.tie?.how === 'round' && game.status === 'gameOver' ? '-' : (game.roundResult?.points[i] ?? 0)}</td>
-                <td>{p.score}</td>
-                <td>
-                  {#if single}
-                    {game.roundResult?.completed[i] ? 'Laid down' : 'Did not lay down'}
-                  {:else if game.status === 'gameOver'}
-                    {doneCount(p) >= phases.length ? 'Finished' : progress(i)}
-                  {:else if game.tieNext}
-                    {@const entry = game.tieNext.find((e) => e.player === i)}
-                    {entry ? `Tiebreaker, Phase ${entry.phase + 1}` : 'Sits out'}
-                  {:else if yousee}
-                    {progress(i)}
-                  {:else}
-                    {phaseLabel(targetPhase(game, i) ?? phases.length)}{game.roundResult?.completed[i] ? '' : ' (repeat)'}
-                  {/if}
-                  {#if !single && game.roundResult?.completed[i] && p.laid !== null}
-                    <span class="sub">Completed Phase {p.laid + 1}</span>
-                  {/if}
-                </td>
-              </tr>
-              <tr class="cards-row">
-                <td colspan="4">
-                  {#if game.tiebreak && isSittingOut(game, i)}
-                    <span class="breakdown">Sat out the tiebreaker</span>
-                  {:else if p.hand.length === 0}
-                    <span class="breakdown">Went out with no cards left</span>
-                  {:else}
-                    {@const left = sortHand(p.hand, 'number')}
-                    <div class="left-cards">
-                      {#each left as c (c.id)}
-                        <CardView card={c} size="xs" />
-                      {/each}
-                    </div>
-                    <span class="breakdown">
-                      {left.map((c) => cardPoints(c)).join(' + ')} = {left.reduce((sum, c) => sum + cardPoints(c), 0)}
-                    </span>
-                  {/if}
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-        <div class="result-links">
-          <button type="button" class="link" onclick={() => (sheet = 'scores')}>Scores</button>
-          <button type="button" class="link" onclick={() => (sheet = 'phases')}>Phases</button>
-        </div>
-        <div class="result-actions">
-          <button type="button" class="ghost big" onclick={() => (resultHidden = true)}>View table</button>
-          {#if game.status === 'gameOver'}
-            <button type="button" class="primary big" bind:this={continueButton} onclick={onExit}>New game</button>
-          {:else}
-            <button type="button" class="primary big" bind:this={continueButton} onclick={startNextRound}>{nextLabel}</button>
-          {/if}
-        </div>
-      </div>
-    </div>
+  {#if game.status !== 'playing'}
+    <RoundResult {game} bind:hidden={resultHidden} onNext={startNextRound} {onExit} onSheet={(tab) => (sheet = tab)} />
   {/if}
 </div>
 
@@ -813,193 +445,11 @@
     color: var(--gold);
   }
 
-  .players {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(8.4rem, 1fr));
-    gap: 0.5rem;
-  }
-  .player {
-    padding: 0.5rem 0.65rem;
-    border-radius: 0.7rem;
-    background: var(--felt-deep);
-    box-shadow: 0 0 0 2px transparent;
-    transition: box-shadow 160ms;
-  }
-  .player.turn {
-    box-shadow: 0 0 0 2px var(--gold);
-  }
-  .player.target {
-    background: rgb(255 216 77 / 0.18);
-    box-shadow: 0 0 0 2px var(--gold);
-  }
-  .player .chip {
-    margin-top: 0.4rem;
-  }
-  .pgoal {
-    margin: 0.25rem 0 0;
-    font-size: 0.8rem;
-    color: var(--gold);
-  }
-  .phead {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.15rem 0.5rem;
-  }
-  .pname {
-    font-weight: 800;
-  }
-  .pstats {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.1rem 0.7rem;
-    font-size: 0.82rem;
-    color: var(--text-dim);
-  }
-  .badge {
-    padding: 0.05rem 0.5rem;
-    border-radius: 99px;
-    font-size: 0.75rem;
-    font-weight: 700;
-  }
-  .tie-note {
-    margin: 0.2rem 0 0.8rem;
-    font-size: 0.95rem;
-    color: var(--gold);
-  }
-  .badge:not(.ok):not(.warn) {
-    background: rgb(255 255 255 / 0.18);
-    color: var(--text);
-  }
-  .badge.ok {
-    background: #2a9a5a;
-    color: #fff;
-  }
-  .badge.warn {
-    background: #ff6b5e;
-    color: #20120f;
-  }
-
-  .melds {
-    overflow: auto;
-    display: flex;
-    flex-wrap: wrap;
-    align-content: flex-start;
-    gap: 0.9rem 1.4rem;
-    padding: 0.7rem;
-    border-radius: 0.9rem;
-    background: rgb(0 0 0 / 0.16);
-    min-height: 5rem;
-    max-height: 36dvh; /* keeps the hand and buttons on screen; extra groups scroll */
-  }
-  .melds .empty {
-    margin: auto;
-    color: var(--text-dim);
-  }
-  .owner h2 {
-    margin: 0 0 0.35rem;
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: var(--text-dim);
-  }
-  .owner-melds {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.6rem;
-  }
-  .meld {
-    padding: 0.4rem 0.5rem 0.5rem;
-    border-radius: 0.6rem;
-    background: rgb(255 255 255 / 0.06);
-    display: grid;
-    gap: 0.3rem;
-    align-content: start;
-  }
-  .meld.target {
-    background: rgb(255 216 77 / 0.18);
-    box-shadow: 0 0 0 2px var(--gold);
-  }
-  .meld-title {
-    font-size: 0.75rem;
-    color: var(--text-dim);
-  }
-  .meld-cards {
-    display: flex;
-    gap: 0.15rem;
-    flex-wrap: wrap;
-    max-width: 22rem;
-  }
-  .hit-row {
-    display: flex;
-    gap: 0.35rem;
-    flex-wrap: wrap;
-  }
-  .chip {
-    padding: 0.35rem 0.7rem;
-    font-size: 0.85rem;
-    border-radius: 99px;
-    background: var(--gold);
-    color: var(--ink);
-  }
-
   .center {
     display: flex;
     align-items: center;
     gap: 1.25rem;
     flex-wrap: wrap;
-  }
-  .piles {
-    display: flex;
-    gap: 1rem;
-  }
-  .pile-wrap {
-    display: grid;
-    justify-items: center;
-    gap: 0.3rem;
-  }
-  .pile-label {
-    font-size: 0.78rem;
-    color: var(--text-dim);
-  }
-  .deck,
-  .slot {
-    width: clamp(50px, 13.5vw, 76px);
-    aspect-ratio: 5 / 7;
-    border-radius: 0.5rem;
-    display: grid;
-    place-items: center;
-    padding: 0;
-  }
-  .deck {
-    background:
-      repeating-linear-gradient(45deg, rgb(255 255 255 / 0.1) 0 6px, transparent 6px 12px),
-      #1f4f9c;
-    box-shadow:
-      0 0 0 3px #fff inset,
-      0 2px 4px rgb(0 0 0 / 0.4);
-    color: #fff;
-    font-weight: 800;
-  }
-  .deck:disabled {
-    opacity: 1;
-    filter: saturate(0.7) brightness(0.85);
-  }
-  .deck:not(:disabled) {
-    box-shadow:
-      0 0 0 3px #fff inset,
-      0 0 0 3px var(--gold),
-      0 2px 4px rgb(0 0 0 / 0.4);
-  }
-  .count {
-    background: rgb(0 0 0 / 0.55);
-    padding: 0.1rem 0.45rem;
-    border-radius: 99px;
-    font-size: 0.85rem;
-  }
-  .slot {
-    border: 2px dashed rgb(255 255 255 / 0.3);
-    color: var(--text-dim);
-    font-size: 0.8rem;
   }
   .talk {
     flex: 1;
@@ -1019,260 +469,14 @@
     color: #ffb3aa;
     font-weight: 600;
   }
-  .history {
-    flex: 1 1 100%;
-    border-radius: 0.7rem;
-    background: var(--felt-deep);
-    padding: 0.45rem 0.7rem;
-  }
-  .history summary {
-    cursor: pointer;
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: var(--text-dim);
-  }
-  .history .filters {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    margin-top: 0.4rem;
-  }
-  .history .fchip {
-    min-height: 1.9rem;
-    padding: 0.15rem 0.7rem;
-    border-radius: 999px;
-    border: 2px solid var(--who, rgb(255 255 255 / 0.5));
-    background: transparent;
-    color: var(--text);
-    font-size: 0.8rem;
-    font-weight: 700;
-  }
-  .history .fchip[aria-pressed='true'] {
-    background: var(--who, #fff);
-    color: var(--ink);
-  }
-  .history .none {
-    margin: 0.4rem 0 0;
-    color: var(--text-dim);
-    font-size: 0.85rem;
-  }
-  .history ol {
-    list-style: none;
-    margin: 0.4rem 0 0;
-    padding: 0;
-    max-height: 10rem;
-    overflow-y: auto;
-  }
-  .history li {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.15rem 0.4rem;
-    padding: 0.25rem 0.4rem 0.25rem 0.5rem;
-    border-left: 4px solid var(--who, #fff);
-    font-size: 0.8rem;
-    min-height: 1.9rem;
-  }
-  .history li + li {
-    margin-top: 0.3rem;
-  }
-  .history .who {
-    font-weight: 800;
-    color: var(--who, #fff);
-  }
-  .history .step {
-    display: inline-flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.2rem;
-  }
-  /* A small arrow between the parts of a turn: took 10, then discarded 11. */
-  .history .step + .step::before {
-    content: '→';
-    margin-right: 0.2rem;
-    color: var(--text-dim);
-  }
-  .history li.lost {
-    color: var(--text-dim);
-    font-style: italic;
-    opacity: 0.85;
-  }
-  .history li:first-child {
-    background: rgb(255 255 255 / 0.06);
-  }
-  .p0 {
-    --who: #ffd84d;
-  }
-  .p1 {
-    --who: #6ee7f9;
-  }
-  .p2 {
-    --who: #ff9ec7;
-  }
-  .p3 {
-    --who: #b9f27c;
-  }
-
-  .hand-area {
-    display: grid;
-    gap: 0.6rem;
-    padding-top: 0.3rem;
-  }
-  .actions {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-  }
-  .actions button {
-    padding: 0.7rem 0.75rem;
-    font-size: 0.92rem;
-  }
-  .hand {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    padding: 0.5rem 0.2rem 0.3rem;
-    min-height: 6rem;
-  }
-
-  .overlay {
-    position: fixed;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    padding: 1rem;
-    background: rgb(5 20 12 / 0.75);
-    z-index: 10;
-  }
-  .panel {
-    width: min(30rem, 100%);
-    max-height: 100%;
-    overflow-y: auto;
-    padding: 1.4rem;
-    border-radius: 1.1rem;
-    background: var(--felt);
-    box-shadow: 0 0 0 2px var(--gold);
-    display: grid;
-    gap: 1rem;
-  }
-  .panel h2 {
-    margin: 0;
-    font-size: 1.6rem;
-    letter-spacing: -0.02em;
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-variant-numeric: tabular-nums;
-  }
-  th,
-  td {
-    padding: 0.4rem 0.3rem;
-    text-align: left;
-    border-bottom: 1px solid rgb(255 255 255 / 0.15);
-  }
-  thead th {
-    font-size: 0.8rem;
-    color: var(--text-dim);
-    font-weight: 600;
-  }
-  .quit-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.6rem;
-  }
-  .result-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.6rem;
-  }
-  .result-links {
-    display: flex;
-    justify-content: center;
-    gap: 1.4rem;
-  }
-  .link {
-    padding: 0.2rem 0.3rem;
-    background: none;
-    color: var(--gold);
-    font-weight: 800;
-    text-decoration: underline;
-  }
-  .result-bar {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 10;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.5rem 0.75rem;
-    padding: 0.7rem max(0.9rem, env(safe-area-inset-right)) max(0.7rem, env(safe-area-inset-bottom))
-      max(0.9rem, env(safe-area-inset-left));
-    background: var(--felt);
-    box-shadow:
-      0 -2px 0 var(--gold),
-      0 -0.5rem 1.5rem rgb(0 0 0 / 0.4);
-  }
-  .result-bar strong {
-    flex: 1 1 0;
-    min-width: 6rem;
-  }
-  .result-bar button {
-    padding: 0.5rem 0.8rem;
-    font-size: 0.9rem;
-  }
   .table.has-bar {
     padding-bottom: 5rem;
-  }
-  .cards-row td {
-    padding-top: 0.2rem;
-    padding-bottom: 0.6rem;
-  }
-  .left-cards {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.25rem;
-  }
-  .breakdown {
-    display: block;
-    margin-top: 0.3rem;
-    font-size: 0.85rem;
-    color: var(--text-dim);
-  }
-  .legend {
-    margin: 0.2rem 0 0;
-    font-size: 0.8rem;
-    color: var(--text-dim);
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-  }
-  .swatch {
-    width: 0.8rem;
-    height: 1.1rem;
-    border-radius: 0.15rem;
-    box-shadow: 0 0 0 2px #6ee7f9;
-  }
-  .sub {
-    display: block;
-    font-size: 0.75rem;
-    color: var(--gold);
-  }
-  .big {
-    padding: 0.9rem;
-    font-size: 1.1rem;
   }
 
   @media (min-width: 720px) {
     .table {
       padding-inline: 1.5rem;
       gap: 1rem;
-    }
-    .hand {
-      flex-wrap: nowrap;
-      justify-content: center;
     }
   }
 </style>
