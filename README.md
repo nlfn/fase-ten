@@ -38,7 +38,18 @@ src/engine/    The game itself. Pure TypeScript, no UI code.
   bot.ts       Computer players (easy, medium and expert)
   *.test.ts    Unit tests plus full bot-vs-bot games
 src/lib/       The Svelte interface
-  Setup.svelte, Game.svelte, CardView.svelte, storage.ts
+  Setup.svelte      The welcome screen
+  Game.svelte       The game screen: the turn, what is selected, what each button does
+  game/             The parts of the game screen
+    PlayerPanels    One panel per player, and where a Skip is played
+    TableGroups     The groups on the table, and where a card is added
+    Piles           The draw and discard piles
+    History         Recent plays, with a chip per player
+    HandArea        The hand and its buttons
+    RoundResult     The summary after a round or a game
+    QuitDialog      The question before abandoning a game
+  gameText.ts       The words the game screen shows for a state (titles, progress, the round summary)
+  Sheet, ScoresTab, PhasesTab, PhasePicker, Designer, CardView, storage.ts, ...
 ```
 
 The engine is the important part. Everything a player does is an action (`drawDeck`, `drawDiscard`, `layDown`, `hit`, `discard`) passed to `applyAction(state, action)`, which returns a new state or an error message. Human clicks and bots use exactly the same path, so a bot can never do anything a person could not.
