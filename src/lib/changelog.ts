@@ -15,8 +15,8 @@ export const CHANGELOG: ChangeEntry[] = [
   {
     id: 27,
     date: '2026-11-15',
-    title: 'Computer players notice what you are collecting',
-    body: 'The computer players now look at the phase you are on, the same way you can see theirs. If you need one color and pick up a red, they hold on to their reds when they have another card just as good to throw. They also tell sets from runs: a second 6 is only kept from you when your phase has a set in it. In You Pick they have to guess until you lay down. Easy still remembers nothing.',
+    title: 'Fixed: computer players fed you the color you were collecting',
+    body: 'This was a bug. The computer players ignored the phase you were on and only thought about numbers, never colors. So if you needed one color and picked up a red, they kept throwing reds to you. They now look at your phase, the same way you can see theirs, and hold on to a card you want when they have another just as good to throw. They also tell sets from runs now. In You Pick they have to guess until you lay down. Easy still remembers nothing.',
   },
   {
     id: 26,
